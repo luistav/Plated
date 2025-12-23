@@ -1,0 +1,7 @@
+{
+  "name": "Mise en Place: Chef R&D Engine",
+  "description": "A high-end digital R&D notebook and costing engine for professional chefs. Manage ingredients, build nested recipes, and document plating logic with real-time cost flow-through.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
