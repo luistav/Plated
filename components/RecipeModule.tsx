@@ -24,24 +24,34 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
     notes: ''
   });
 
-  const getComponentTotalCost = (comp: RecipeComponent): number => {
-    if (comp.type === 'ingredient') {
-      const ing = ingredients.find(i => i.id === comp.id);
-      return ing ? getIngredientUnitCost(ing) * comp.quantity : 0;
-    } else {
-      const rec = recipes.find(r => r.id === comp.id);
-      return rec && rec.yieldQuantity > 0 ? (getRecipeCost(rec) / rec.yieldQuantity) * comp.quantity : 0;
-    }
-  };
-
   const getComponentUnitCost = (comp: RecipeComponent): number => {
     if (comp.type === 'ingredient') {
       const ing = ingredients.find(i => i.id === comp.id);
-      return ing ? getIngredientUnitCost(ing) : 0;
+      if (!ing) return 0;
+      const baseCost = getIngredientUnitCost(ing); // Cost per g/ml/unit
+      
+      // If component unit is large (kg/L), multiply base cost by 1000 to show cost per Kg/L
+      if (comp.unit === 'kg' && (ing.packUnit === 'kg' || ing.packUnit === 'g')) return baseCost * 1000;
+      if (comp.unit === 'L' && (ing.packUnit === 'L' || ing.packUnit === 'ml')) return baseCost * 1000;
+      
+      return baseCost;
     } else {
       const rec = recipes.find(r => r.id === comp.id);
-      return rec && rec.yieldQuantity > 0 ? (getRecipeCost(rec) / rec.yieldQuantity) : 0;
+      if (!rec || !rec.yieldQuantity) return 0;
+
+      const subTotalCost = getRecipeCost(rec);
+      let yieldBase = rec.yieldQuantity;
+      if (rec.yieldUnit === 'kg' || rec.yieldUnit === 'L') yieldBase *= 1000;
+      
+      const costPerBase = subTotalCost / yieldBase;
+      
+      if (comp.unit === 'kg' || comp.unit === 'L') return costPerBase * 1000;
+      return costPerBase;
     }
+  };
+
+  const getComponentTotalCost = (comp: RecipeComponent): number => {
+    return getComponentUnitCost(comp) * comp.quantity;
   };
 
   const getNewRecipeTotalCost = (): number => {
@@ -100,22 +110,22 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-20 md:pb-0">
       <div className="flex justify-between items-center">
-        <h3 className="text-sm font-medium text-stone-500 italic">Component Recipes & Sub-Preps</h3>
+        <h3 className="text-sm font-medium text-stone-500 italic hidden md:block">Component Recipes & Sub-Preps</h3>
         <button 
           onClick={() => {
             setEditingId(null);
             setNewRecipe({ name: '', type: 'Prep', components: [], yieldQuantity: 1000, yieldUnit: 'g', method: [''], notes: '' });
             setShowEditor(true);
           }}
-          className="bg-stone-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-stone-800 transition-all shadow-sm"
+          className="w-full md:w-auto bg-stone-900 text-white px-4 py-3 rounded-xl md:rounded-lg text-xs font-bold hover:bg-stone-800 transition-all shadow-sm flex items-center justify-center"
         >
           <i className="fas fa-plus mr-2"></i> NEW COMPONENT
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
         {recipes.map(recipe => (
           <div key={recipe.id} className="bg-white rounded-2xl border border-stone-200 overflow-hidden hover:shadow-md transition-all flex flex-col group">
              <div className="bg-stone-50 px-6 py-4 flex justify-between items-center border-b border-stone-100">
@@ -138,33 +148,35 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
              </div>
              
              <div className="p-6 flex-1">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-stone-100 text-stone-400 font-bold uppercase">
-                      <th className="pb-2">Ingredient</th>
-                      <th className="pb-2 text-right">Qty</th>
-                      <th className="pb-2 text-right">Unit Cost</th>
-                      <th className="pb-2 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recipe.components.map((comp, idx) => {
-                      const ingOrRec = comp.type === 'ingredient' 
-                        ? ingredients.find(i => i.id === comp.id) 
-                        : recipes.find(r => r.id === comp.id);
-                      const unitCost = getComponentUnitCost(comp);
-                      const lineTotal = getComponentTotalCost(comp);
-                      return (
-                        <tr key={idx} className="border-b border-stone-50 last:border-0 group-hover:bg-stone-50 transition-colors">
-                          <td className="py-2 font-medium text-stone-700">{ingOrRec?.name || 'Unknown Item'}</td>
-                          <td className="py-2 text-right text-stone-500 font-mono">{comp.quantity}{comp.unit}</td>
-                          <td className="py-2 text-right text-stone-400 font-mono">${unitCost.toFixed(3)}</td>
-                          <td className="py-2 text-right font-bold text-stone-800 font-mono">${lineTotal.toFixed(2)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[300px]">
+                    <thead>
+                      <tr className="border-b border-stone-100 text-stone-400 font-bold uppercase">
+                        <th className="pb-2">Ingredient</th>
+                        <th className="pb-2 text-right">Qty</th>
+                        <th className="pb-2 text-right">Cost / Unit</th>
+                        <th className="pb-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recipe.components.map((comp, idx) => {
+                        const ingOrRec = comp.type === 'ingredient' 
+                          ? ingredients.find(i => i.id === comp.id) 
+                          : recipes.find(r => r.id === comp.id);
+                        const unitCost = getComponentUnitCost(comp);
+                        const lineTotal = getComponentTotalCost(comp);
+                        return (
+                          <tr key={idx} className="border-b border-stone-50 last:border-0 group-hover:bg-stone-50 transition-colors">
+                            <td className="py-2 font-medium text-stone-700">{ingOrRec?.name || 'Unknown Item'}</td>
+                            <td className="py-2 text-right text-stone-500 font-mono">{comp.quantity}{comp.unit}</td>
+                            <td className="py-2 text-right text-stone-400 font-mono">${unitCost.toFixed(3)}</td>
+                            <td className="py-2 text-right font-bold text-stone-800 font-mono">${lineTotal.toFixed(2)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
                 
                 {recipe.method.length > 0 && (
                    <div className="mt-6 pt-6 border-t border-stone-100">
@@ -189,16 +201,16 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
       </div>
       
       {showEditor && (
-        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-           <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="px-8 py-6 border-b border-stone-100 flex justify-between items-center bg-stone-50">
-                 <h2 className="text-2xl font-bold serif text-stone-900">{editingId ? 'Edit Recipe' : 'New Recipe Specification'}</h2>
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center md:p-4">
+           <div className="bg-white w-full h-full md:h-auto md:max-w-5xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col md:max-h-[90vh]">
+              <div className="px-6 py-4 md:px-8 md:py-6 border-b border-stone-100 flex justify-between items-center bg-stone-50 shrink-0">
+                 <h2 className="text-xl md:text-2xl font-bold serif text-stone-900">{editingId ? 'Edit Recipe' : 'New Recipe Specification'}</h2>
                  <button onClick={() => setShowEditor(false)} className="w-10 h-10 rounded-full hover:bg-stone-200 flex items-center justify-center transition-colors">
                    <i className="fas fa-times text-stone-400"></i>
                  </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 space-y-8">
+              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                    <div className="space-y-4">
                      <div className="space-y-2">
@@ -271,69 +283,86 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
                        <div className="flex gap-3 px-2 text-stone-400 font-bold uppercase text-[10px]">
                            <div className="flex-[0.5]">Type</div>
                            <div className="flex-1">Item</div>
-                           <div className="w-24">Qty</div>
-                           <div className="w-20">Unit</div>
-                           <div className="w-20 text-right">Unit Cost</div>
-                           <div className="w-20 text-right">Total</div>
+                           <div className="w-24 hidden md:block">Qty</div>
+                           <div className="w-20 hidden md:block">Unit</div>
+                           <div className="w-20 text-right hidden md:block">Unit Cost</div>
+                           <div className="w-20 text-right hidden md:block">Total</div>
                            <div className="w-10"></div>
                        </div>
                        {newRecipe.components?.map((comp, idx) => {
                          const unitCost = getComponentUnitCost(comp);
                          const lineTotal = getComponentTotalCost(comp);
                          return (
-                           <div key={idx} className="flex gap-3 items-center animate-in slide-in-from-left duration-200">
-                              <div className="flex-[0.5]">
-                                 <select 
-                                   className="w-full bg-stone-50 border-stone-200 border rounded-lg p-2 text-xs outline-none"
-                                   value={comp.type}
-                                   onChange={e => updateComponent(idx, 'type', e.target.value)}
-                                 >
-                                   <option value="ingredient">Ingredient</option>
-                                   <option value="recipe">Recipe</option>
-                                 </select>
+                           <div key={idx} className="flex flex-col md:flex-row gap-3 md:items-center bg-stone-50 p-4 md:p-0 rounded-lg md:rounded-none md:bg-transparent animate-in slide-in-from-left duration-200">
+                              <div className="flex gap-3 items-center w-full">
+                                  <div className="flex-[0.5] md:w-auto">
+                                     <select 
+                                       className="w-full bg-stone-50 border-stone-200 border rounded-lg p-2 text-xs outline-none"
+                                       value={comp.type}
+                                       onChange={e => updateComponent(idx, 'type', e.target.value)}
+                                     >
+                                       <option value="ingredient">Ing</option>
+                                       <option value="recipe">Rec</option>
+                                     </select>
+                                  </div>
+                                  <div className="flex-1">
+                                     <select 
+                                       className="w-full bg-stone-50 border-stone-200 border rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-stone-400"
+                                       value={comp.id}
+                                       onChange={e => updateComponent(idx, 'id', e.target.value)}
+                                     >
+                                       <option value="">Select Item...</option>
+                                       {comp.type === 'ingredient' ? ingredients.map(ing => (
+                                         <option key={ing.id} value={ing.id}>{ing.name}</option>
+                                       )) : recipes.filter(r => r.id !== editingId).map(rec => (
+                                         <option key={rec.id} value={rec.id}>{rec.name}</option>
+                                       ))}
+                                     </select>
+                                  </div>
+                                  {/* Mobile Only Remove */}
+                                   <button onClick={() => removeComponent(idx)} className="md:hidden w-8 h-8 rounded-lg bg-rose-50 text-rose-400 flex items-center justify-center">
+                                     <i className="fas fa-trash-alt text-xs"></i>
+                                  </button>
                               </div>
-                              <div className="flex-1">
-                                 <select 
-                                   className="w-full bg-stone-50 border-stone-200 border rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-stone-400"
-                                   value={comp.id}
-                                   onChange={e => updateComponent(idx, 'id', e.target.value)}
-                                 >
-                                   <option value="">Select Item...</option>
-                                   {comp.type === 'ingredient' ? ingredients.map(ing => (
-                                     <option key={ing.id} value={ing.id}>{ing.name}</option>
-                                   )) : recipes.filter(r => r.id !== editingId).map(rec => (
-                                     <option key={rec.id} value={rec.id}>{rec.name}</option>
-                                   ))}
-                                 </select>
+                              
+                              <div className="flex gap-2 w-full md:w-auto">
+                                  <div className="w-1/2 md:w-24">
+                                     <input 
+                                       className="w-full bg-stone-50 border-stone-200 border rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-stone-400 text-right font-mono" 
+                                       type="number"
+                                       placeholder="Qty"
+                                       value={comp.quantity}
+                                       onChange={e => updateComponent(idx, 'quantity', Number(e.target.value))}
+                                     />
+                                  </div>
+                                  <div className="w-1/2 md:w-20">
+                                     <select 
+                                       className="w-full bg-stone-50 border-stone-200 border rounded-lg p-2 text-xs outline-none"
+                                       value={comp.unit}
+                                       onChange={e => updateComponent(idx, 'unit', e.target.value)}
+                                     >
+                                       <option value="g">g</option>
+                                       <option value="kg">kg</option>
+                                       <option value="ml">ml</option>
+                                       <option value="L">L</option>
+                                       <option value="unit">unit</option>
+                                     </select>
+                                  </div>
                               </div>
-                              <div className="w-24">
-                                 <input 
-                                   className="w-full bg-stone-50 border-stone-200 border rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-stone-400 text-right font-mono" 
-                                   type="number"
-                                   value={comp.quantity}
-                                   onChange={e => updateComponent(idx, 'quantity', Number(e.target.value))}
-                                 />
+
+                              <div className="flex justify-between md:contents text-xs mt-2 md:mt-0">
+                                  <span className="md:hidden text-stone-400 font-bold uppercase">Cost</span>
+                                  <div className="flex gap-4">
+                                      <div className="w-20 text-right text-stone-500 font-mono hidden md:block">
+                                        ${unitCost.toFixed(3)}
+                                      </div>
+                                      <div className="w-20 text-right font-bold text-stone-800 font-mono">
+                                        ${lineTotal.toFixed(2)}
+                                      </div>
+                                  </div>
                               </div>
-                              <div className="w-20">
-                                 <select 
-                                   className="w-full bg-stone-50 border-stone-200 border rounded-lg p-2 text-xs outline-none"
-                                   value={comp.unit}
-                                   onChange={e => updateComponent(idx, 'unit', e.target.value)}
-                                 >
-                                   <option value="g">g</option>
-                                   <option value="kg">kg</option>
-                                   <option value="ml">ml</option>
-                                   <option value="L">L</option>
-                                   <option value="unit">unit</option>
-                                 </select>
-                              </div>
-                              <div className="w-20 text-right text-xs text-stone-500 font-mono">
-                                ${unitCost.toFixed(3)}
-                              </div>
-                              <div className="w-20 text-right text-xs font-bold text-stone-800 font-mono">
-                                ${lineTotal.toFixed(2)}
-                              </div>
-                              <button onClick={() => removeComponent(idx)} className="w-10 h-10 rounded-lg hover:bg-rose-50 text-rose-400 transition-colors flex items-center justify-center">
+                              
+                              <button onClick={() => removeComponent(idx)} className="hidden md:flex w-10 h-10 rounded-lg hover:bg-rose-50 text-rose-400 transition-colors items-center justify-center">
                                  <i className="fas fa-trash-alt text-xs"></i>
                               </button>
                            </div>
@@ -343,31 +372,32 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
                  </div>
               </div>
 
-              <div className="px-8 py-6 border-t border-stone-100 bg-stone-50 flex justify-between items-center">
-                 <div className="flex gap-8">
+              {/* Total Calculation Footer */}
+              <div className="px-6 py-4 md:px-8 md:py-6 border-t border-stone-100 bg-stone-50 flex flex-col md:flex-row justify-between md:items-center gap-4 shrink-0">
+                 <div className="flex justify-between md:gap-8">
                     <div>
                        <p className="text-[10px] font-bold text-stone-400 uppercase">Total Batch Cost</p>
                        <p className="text-xl font-black text-stone-900">${getNewRecipeTotalCost().toFixed(2)}</p>
                     </div>
-                    <div>
+                    <div className="text-right md:text-left">
                        <p className="text-[10px] font-bold text-stone-400 uppercase">Cost Per {newRecipe.yieldUnit}</p>
                        <p className="text-xl font-bold text-stone-500">
                          ${(newRecipe.yieldQuantity ? getNewRecipeTotalCost() / newRecipe.yieldQuantity : 0).toFixed(3)}
                        </p>
                     </div>
                  </div>
-                 <div className="flex gap-3">
+                 <div className="flex gap-3 w-full md:w-auto">
                    <button 
                     onClick={() => setShowEditor(false)}
-                    className="px-6 py-2 rounded-xl text-sm font-bold text-stone-500 hover:bg-stone-200 transition-all"
+                    className="flex-1 md:flex-none px-6 py-2 rounded-xl text-sm font-bold text-stone-500 hover:bg-stone-200 transition-all border border-stone-200 md:border-0"
                    >
                      Discard
                    </button>
                    <button 
                     onClick={handleSave}
-                    className="bg-stone-900 text-white px-8 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-stone-800 transition-all"
+                    className="flex-1 md:flex-none bg-stone-900 text-white px-8 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-stone-800 transition-all"
                    >
-                     {editingId ? 'Update Recipe' : 'Finalize Recipe'}
+                     Save
                    </button>
                  </div>
               </div>

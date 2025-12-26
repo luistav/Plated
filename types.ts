@@ -11,17 +11,56 @@ export enum IngredientCategory {
   Other = 'Other'
 }
 
+export interface Supplier {
+  id: string;
+  name: string;
+  contactEmail: string;
+  contactPhone: string;
+  deliveryDays: string[]; // e.g. ['Mon', 'Wed', 'Fri']
+  minOrder: number;
+  repName: string;
+  repMobile: string;
+  repEmail: string;
+  notes: string;
+}
+
+export interface IngredientPricing {
+  supplierId: string;
+  supplierName: string; // Denormalized for display if supplier is deleted
+  price: number;
+  packSize: number;
+  packUnit: UnitOfMeasure;
+  productCode?: string;
+}
+
+export interface PriceHistoryEntry {
+  date: number;
+  price: number;
+  supplier: string;
+  note?: string; // e.g., "Supplier Change" or "Annual Increase"
+}
+
 export interface Ingredient {
   id: string;
   name: string;
   category: IngredientCategory;
-  supplier: string;
+  
+  // These root fields represent the "Standard" or "Preferred" option used for costing
+  supplier: string; 
+  supplierId?: string; // Link to the Supplier Entity
   packSize: number;
   packUnit: UnitOfMeasure;
   price: number; // Total pack price
+  
   yieldPercent: number; // Default 100
   notes: string;
   lastUpdated: number;
+
+  // List of all available suppliers for this item
+  alternativeSuppliers?: IngredientPricing[]; 
+  
+  // Price tracking
+  priceHistory?: PriceHistoryEntry[];
 }
 
 export type RecipeType = 'Prep' | 'Sauce' | 'Base' | 'Garnish' | 'Full Recipe';
@@ -80,5 +119,14 @@ export interface Dish {
   gallery: string[];
   inspirationLinks: string[];
   sellingPrice: number;
+  lastUpdated: number;
+}
+
+export interface Menu {
+  id: string;
+  name: string;
+  description: string;
+  dishIds: string[];
+  status: 'Draft' | 'Active' | 'Archived';
   lastUpdated: number;
 }
