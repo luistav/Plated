@@ -441,19 +441,70 @@ const MenuDetail = ({
                </div>
 
                {/* Table of Contents */}
-               {bibleGrouping === 'dish' && (
-                 <div className="print-only page-break-after py-12">
-                    <h2 className="text-3xl font-bold serif border-b-4 border-stone-900 pb-4 mb-8">Table of Contents</h2>
-                    <ul className="space-y-4">
-                        {menuDishes.map((d, i) => (
-                           <li key={d.id} className="flex items-baseline justify-between border-b border-dotted border-stone-300 pb-2">
-                              <span className="text-lg font-serif"><span className="font-sans font-bold text-stone-400 mr-4">0{i+1}</span> {d.name}</span>
-                              <span className="text-xs font-bold uppercase tracking-widest text-stone-500">{d.category}</span>
-                           </li>
-                        ))}
-                    </ul>
-                 </div>
-               )}
+               <div className="print-only page-break-after py-12">
+                  <h2 className="text-3xl font-bold serif border-b-4 border-stone-900 pb-4 mb-8">Table of Contents</h2>
+                  
+                  {bibleGrouping === 'dish' ? (
+                      <ul className="space-y-6">
+                          {menuDishes.map((d, i) => {
+                             const dishRecipes = d.components
+                                .filter(c => c.type === 'recipe')
+                                .map(c => recipes.find(r => r.id === c.id))
+                                .filter((r): r is Recipe => !!r);
+
+                             return (
+                                 <li key={d.id}>
+                                    <div className="flex items-baseline justify-between border-b border-stone-900 pb-1 mb-2">
+                                       <span className="text-xl font-serif font-bold text-stone-900">
+                                          <span className="font-sans text-stone-400 mr-4 text-sm">0{i+1}</span> 
+                                          {d.name}
+                                       </span>
+                                       <span className="text-xs font-bold uppercase tracking-widest text-stone-500">{d.category}</span>
+                                    </div>
+                                    {dishRecipes.length > 0 && (
+                                       <ul className="pl-12 space-y-1">
+                                          {dishRecipes.map((r, idx) => (
+                                             <li key={idx} className="flex justify-between items-baseline text-sm text-stone-600 font-serif">
+                                                <span>↳ {r.name}</span>
+                                                <span className="text-[10px] uppercase tracking-wider text-stone-400">{r.type}</span>
+                                             </li>
+                                          ))}
+                                       </ul>
+                                    )}
+                                 </li>
+                             );
+                          })}
+                      </ul>
+                  ) : (
+                      <ul className="space-y-8">
+                          {['Prep', 'Sauce', 'Base', 'Garnish'].map(type => {
+                             const usedRecipeIds = new Set<string>();
+                             menuDishes.forEach(d => d.components.forEach(c => {
+                               if (c.type === 'recipe') usedRecipeIds.add(c.id);
+                             }));
+                             
+                             const typeRecipes = recipes.filter(r => r.type === type && usedRecipeIds.has(r.id));
+                             if (typeRecipes.length === 0) return null;
+
+                             return (
+                               <li key={type}>
+                                  <div className="bg-stone-100 p-2 mb-3 border-l-4 border-stone-900">
+                                     <h3 className="text-lg font-black uppercase tracking-widest text-stone-900">{type} Station</h3>
+                                  </div>
+                                  <ul className="pl-6 space-y-2">
+                                     {typeRecipes.map(r => (
+                                        <li key={r.id} className="flex items-baseline justify-between border-b border-dotted border-stone-300 pb-1">
+                                           <span className="font-serif text-stone-800 text-lg">{r.name}</span>
+                                           <span className="font-mono text-xs text-stone-500">Yield: {r.yieldQuantity}{r.yieldUnit}</span>
+                                        </li>
+                                     ))}
+                                  </ul>
+                               </li>
+                             );
+                          })}
+                      </ul>
+                  )}
+               </div>
 
                {bibleGrouping === 'dish' ? (
                  <div className="space-y-12 print:space-y-0">
