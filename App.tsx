@@ -173,6 +173,7 @@ const App: React.FC = () => {
          }
       } else {
          setUserProfile(null);
+         // Clear data on logout
          setIngredients([]);
          setRecipes([]);
          setDishes([]);
@@ -214,13 +215,18 @@ const App: React.FC = () => {
         const snapshot = await getDocs(ingsRef);
         
         if (snapshot.empty) {
+          console.log("Seeding initial data for new user...");
           const batch = writeBatch(db);
+
+          // Use DbService helper logic manually or directly via batch
           await DbService.seed(user.uid, 'suppliers', INITIAL_SUPPLIERS, batch);
           await DbService.seed(user.uid, 'ingredients', INITIAL_INGREDIENTS, batch);
           await DbService.seed(user.uid, 'recipes', INITIAL_RECIPES, batch);
           await DbService.seed(user.uid, 'dishes', INITIAL_DISHES, batch);
           await DbService.seed(user.uid, 'menus', INITIAL_MENUS, batch);
+
           await batch.commit();
+          console.log("Seeding complete.");
         }
       } catch (e) {
         console.error("Error seeding data:", e);
@@ -241,6 +247,7 @@ const App: React.FC = () => {
   };
 
   // --- Calculations ---
+
   const getIngredientUnitCost = (ing: Ingredient): number => {
     let divisor = ing.packSize;
     if (ing.packUnit === 'kg' || ing.packUnit === 'L') divisor *= 1000;
@@ -254,21 +261,32 @@ const App: React.FC = () => {
       if (comp.type === 'ingredient') {
         const ing = ingredients.find(i => i.id === comp.id);
         if (!ing) return acc;
+        
         const baseCost = getIngredientUnitCost(ing);
         let quantityInBase = comp.quantity;
-        if (comp.unit === 'kg' && (ing.packUnit === 'kg' || ing.packUnit === 'g')) quantityInBase *= 1000;
-        else if (comp.unit === 'L' && (ing.packUnit === 'L' || ing.packUnit === 'ml')) quantityInBase *= 1000;
+        
+        if (comp.unit === 'kg' && (ing.packUnit === 'kg' || ing.packUnit === 'g')) {
+          quantityInBase *= 1000;
+        } else if (comp.unit === 'L' && (ing.packUnit === 'L' || ing.packUnit === 'ml')) {
+          quantityInBase *= 1000;
+        }
+        
         return acc + (baseCost * quantityInBase);
       } else {
         const sub = recipes.find(r => r.id === comp.id);
         if (!sub) return acc;
+        
         const subTotalCost = getRecipeCost(sub);
+        
         let subYieldInBase = sub.yieldQuantity;
         if (sub.yieldUnit === 'kg' || sub.yieldUnit === 'L') subYieldInBase *= 1000;
         if (subYieldInBase === 0) return acc;
+
         const costPerBaseUnit = subTotalCost / subYieldInBase;
+        
         let quantityInBase = comp.quantity;
         if (comp.unit === 'kg' || comp.unit === 'L') quantityInBase *= 1000;
+
         return acc + (costPerBaseUnit * quantityInBase);
       }
     }, 0);
@@ -277,6 +295,7 @@ const App: React.FC = () => {
   const getDishCostBreakdown = (dish: Dish) => {
     let food = 0;
     let packaging = 0;
+
     dish.components.forEach(comp => {
       let cost = 0;
       if (comp.type === 'ingredient' || comp.type === 'packaging') {
@@ -294,6 +313,7 @@ const App: React.FC = () => {
           const subTotalCost = getRecipeCost(rec);
           let subYieldInBase = rec.yieldQuantity;
           if (rec.yieldUnit === 'kg' || rec.yieldUnit === 'L') subYieldInBase *= 1000;
+          
           if (subYieldInBase > 0) {
             let quantityInBase = comp.quantity;
             if (comp.unit === 'kg' || comp.unit === 'L') quantityInBase *= 1000;
@@ -301,99 +321,50 @@ const App: React.FC = () => {
           }
         }
       }
+
       if (comp.type === 'packaging') packaging += cost;
       else food += cost;
     });
+
     return { food, packaging, total: food + packaging };
   };
 
-  // --- CRUD Wrappers (CLEAN & RELIABLE) ---
-  const addIngredient = (ing: Ingredient) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) DbService.add(uid, 'ingredients', ing);
-  };
-  const updateIngredient = (updated: Ingredient) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) DbService.update(uid, 'ingredients', updated);
-  };
-  const deleteIngredient = async (id: string) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-        try { await DbService.delete(uid, 'ingredients', id); } 
-        catch (e: any) { alert(e.message); }
-    }
-  };
-  const deleteIngredientsBulk = async (ids: string[]) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-        try { await DbService.bulkDelete(uid, 'ingredients', ids); } 
-        catch (e: any) { alert(e.message); }
-    }
-  };
+  // --- CRUD Wrappers ---
 
-  const addRecipe = (rec: Recipe) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) DbService.add(uid, 'recipes', rec);
-  };
-  const updateRecipe = (updated: Recipe) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) DbService.update(uid, 'recipes', updated);
-  };
-  const deleteRecipe = async (id: string) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-        try { await DbService.delete(uid, 'recipes', id); } 
-        catch (e: any) { alert(e.message); }
-    }
-  };
+  const addIngredient = (ing: Ingredient) => user && DbService.add(user.uid, 'ingredients', ing);
+  const updateIngredient = (updated: Ingredient) => user && DbService.update(user.uid, 'ingredients', updated);
+  const deleteIngredient = (id: string) => {
+    console.log("App: Requesting delete for ingredient", id);
+    if(user) DbService.delete(user.uid, 'ingredients', id);
+  }
 
-  const addDish = (dish: Dish) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) DbService.add(uid, 'dishes', dish);
-  };
-  const updateDish = (updated: Dish) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) DbService.update(uid, 'dishes', updated);
-  };
-  const deleteDish = async (id: string) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-        try { await DbService.delete(uid, 'dishes', id); } 
-        catch (e: any) { alert(e.message); }
-    }
-  };
+  const addRecipe = (rec: Recipe) => user && DbService.add(user.uid, 'recipes', rec);
+  const updateRecipe = (updated: Recipe) => user && DbService.update(user.uid, 'recipes', updated);
+  const deleteRecipe = (id: string) => {
+    console.log("App: Requesting delete for recipe", id);
+    if(user) DbService.delete(user.uid, 'recipes', id);
+  }
 
-  const addMenu = (menu: Menu) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) DbService.add(uid, 'menus', menu);
-  };
-  const updateMenu = (updated: Menu) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) DbService.update(uid, 'menus', updated);
-  };
-  const deleteMenu = async (id: string) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-        try { await DbService.delete(uid, 'menus', id); } 
-        catch (e: any) { alert(e.message); }
-    }
-  };
+  const addDish = (dish: Dish) => user && DbService.add(user.uid, 'dishes', dish);
+  const updateDish = (updated: Dish) => user && DbService.update(user.uid, 'dishes', updated);
+  const deleteDish = (id: string) => {
+    console.log("App: Requesting delete for dish", id);
+    if(user) DbService.delete(user.uid, 'dishes', id);
+  }
 
-  const addSupplier = (sup: Supplier) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) DbService.add(uid, 'suppliers', sup);
-  };
-  const updateSupplier = (updated: Supplier) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) DbService.update(uid, 'suppliers', updated);
-  };
-  const deleteSupplier = async (id: string) => {
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-        try { await DbService.delete(uid, 'suppliers', id); } 
-        catch (e: any) { alert(e.message); }
-    }
-  };
+  const addMenu = (menu: Menu) => user && DbService.add(user.uid, 'menus', menu);
+  const updateMenu = (updated: Menu) => user && DbService.update(user.uid, 'menus', updated);
+  const deleteMenu = (id: string) => {
+    console.log("App: Requesting delete for menu", id);
+    if(user) DbService.delete(user.uid, 'menus', id);
+  }
+
+  const addSupplier = (sup: Supplier) => user && DbService.add(user.uid, 'suppliers', sup);
+  const updateSupplier = (updated: Supplier) => user && DbService.update(user.uid, 'suppliers', updated);
+  const deleteSupplier = (id: string) => {
+    console.log("App: Requesting delete for supplier", id);
+    if(user) DbService.delete(user.uid, 'suppliers', id);
+  }
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-stone-50"><i className="fas fa-circle-notch fa-spin text-stone-300 text-2xl"></i></div>;
@@ -405,10 +376,12 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-stone-50 text-stone-900">
+      {/* Sidebar hidden on mobile, visible on medium+ screens */}
       <div className="hidden md:block">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onSignOut={handleSignOut} userProfile={userProfile} />
       </div>
 
+      {/* Main Content */}
       <main className="flex-1 overflow-y-auto max-h-[calc(100vh-64px)] md:max-h-screen px-4 py-6 md:px-12 md:py-8 mb-16 md:mb-0 print:overflow-visible print:max-h-none print:p-0 print:m-0">
         <header className="mb-6 md:mb-8 flex justify-between items-center border-b border-stone-200 pb-4 md:pb-6 print:hidden">
           <div>
@@ -428,7 +401,7 @@ const App: React.FC = () => {
         </header>
 
         {activeTab === 'dashboard' && <Dashboard ingredientsCount={ingredients.length} recipesCount={recipes.length} dishesCount={dishes.length} recentIngredients={ingredients.slice(-3)} />}
-        {activeTab === 'ingredients' && <IngredientModule ingredients={ingredients} suppliers={suppliers} onAdd={addIngredient} onUpdate={updateIngredient} onDelete={deleteIngredient} onBulkDelete={deleteIngredientsBulk} getUnitCost={getIngredientUnitCost} onAddSupplier={addSupplier} />}
+        {activeTab === 'ingredients' && <IngredientModule ingredients={ingredients} suppliers={suppliers} onAdd={addIngredient} onUpdate={updateIngredient} onDelete={deleteIngredient} getUnitCost={getIngredientUnitCost} onAddSupplier={addSupplier} />}
         {activeTab === 'recipes' && <RecipeModule recipes={recipes} ingredients={ingredients} getRecipeCost={getRecipeCost} getIngredientUnitCost={getIngredientUnitCost} onAdd={addRecipe} onUpdate={updateRecipe} onDelete={deleteRecipe} />}
         {activeTab === 'dishes' && <DishModule dishes={dishes} recipes={recipes} ingredients={ingredients} getDishCostBreakdown={getDishCostBreakdown} onAdd={addDish} onUpdate={updateDish} onDelete={deleteDish} />}
         {activeTab === 'menus' && <MenuModule menus={menus} dishes={dishes} recipes={recipes} ingredients={ingredients} getDishCostBreakdown={getDishCostBreakdown} onAdd={addMenu} onUpdate={updateMenu} onDelete={deleteMenu} />}
@@ -437,6 +410,7 @@ const App: React.FC = () => {
         {activeTab === 'profile' && userProfile && <ProfileModule userProfile={userProfile} onUpdateProfile={(p) => setUserProfile(p)} />}
       </main>
 
+      {/* Mobile Navigation */}
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
   );

@@ -69,30 +69,6 @@ const Auth: React.FC = () => {
      }
   };
 
-  const getFriendlyErrorMessage = (error: any) => {
-    const code = error.code;
-    console.error("Auth Error Debug:", code, error.message);
-
-    switch (code) {
-      case 'auth/invalid-credential':
-      case 'auth/user-not-found':
-      case 'auth/wrong-password':
-        return "Incorrect email or password. If you haven't created a profile yet, please sign up.";
-      case 'auth/email-already-in-use':
-        return "This email is already in use. Please sign in instead.";
-      case 'auth/weak-password':
-        return "Password is too weak. Please use at least 6 characters.";
-      case 'auth/invalid-email':
-        return "Please enter a valid email address.";
-      case 'auth/network-request-failed':
-        return "Unable to connect. Please check your internet connection.";
-      case 'auth/too-many-requests':
-        return "Too many failed attempts. Please try again later or reset your password.";
-      default:
-        return error.message || "An unexpected authentication error occurred.";
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -101,35 +77,52 @@ const Auth: React.FC = () => {
     try {
       if (isLogin) {
         // LOGIN FLOW
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        // Sync on login ensures existing users get a doc if they don't have one
-        await syncUserToFirestore(userCredential.user);
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          // Sync on login ensures existing users get a doc if they don't have one
+          await syncUserToFirestore(userCredential.user);
+        } catch (err: any) {
+          console.error("Login Error", err.code);
+          if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-email') {
+             throw new Error("Password or Email Incorrect");
+          }
+          throw err;
+        }
       } else {
         // REGISTRATION FLOW
         if (password !== confirmPassword) {
-          throw { code: 'custom/password-mismatch', message: "Passwords do not match." };
+          throw new Error("Passwords do not match.");
         }
         
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        
-        let photoURL = '';
-        if (photoPreview) {
-            const url = await uploadProfilePhoto(user.uid, photoPreview);
-            if (url) photoURL = url;
+        try {
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          const user = userCredential.user;
+          
+          let photoURL = '';
+          if (photoPreview) {
+             const url = await uploadProfilePhoto(user.uid, photoPreview);
+             if (url) photoURL = url;
+          }
+
+          // Update Firebase Auth Profile
+          await updateProfile(user, { 
+            displayName: name,
+            photoURL: photoURL 
+          });
+
+          // Create Firestore Document
+          await syncUserToFirestore(user, { displayName: name, photoURL });
+
+        } catch (err: any) {
+           console.error("Register Error", err.code);
+           if (err.code === 'auth/email-already-in-use') {
+             throw new Error("User already exists. Sign in?");
+           }
+           throw err;
         }
-
-        // Update Firebase Auth Profile
-        await updateProfile(user, { 
-          displayName: name,
-          photoURL: photoURL 
-        });
-
-        // Create Firestore Document
-        await syncUserToFirestore(user, { displayName: name, photoURL });
       }
     } catch (err: any) {
-      setError(getFriendlyErrorMessage(err));
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -150,7 +143,8 @@ const Auth: React.FC = () => {
       await sendPasswordResetEmail(auth, email);
       setResetEmailSent(true);
     } catch (err: any) {
-      setError(getFriendlyErrorMessage(err));
+      console.error("Reset Password Error", err.code);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -248,11 +242,11 @@ const Auth: React.FC = () => {
                </h2>
 
                {error && (
-                 <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-3 text-sm text-rose-600 animate-in fade-in duration-300">
-                    <i className="fas fa-exclamation-circle shrink-0"></i>
+                 <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-3 text-sm text-rose-600">
+                    <i className="fas fa-exclamation-circle"></i>
                     <div className="flex-1">
                       <p>{error}</p>
-                      {error.includes("already in use") && (
+                      {error === "User already exists. Sign in?" && (
                         <button onClick={switchToLogin} className="text-xs font-bold underline mt-1 hover:text-rose-800">
                           Go to Sign In
                         </button>
