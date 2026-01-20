@@ -11,8 +11,19 @@ export enum IngredientCategory {
   Other = 'Other'
 }
 
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  role: string;
+  bio?: string;
+  lastLogin?: number;
+}
+
 export interface Supplier {
   id: string;
+  userId?: string; // Data Privacy Field
   name: string;
   contactEmail: string;
   contactPhone: string;
@@ -42,6 +53,7 @@ export interface PriceHistoryEntry {
 
 export interface Ingredient {
   id: string;
+  userId?: string; // Data Privacy Field
   name: string;
   category: IngredientCategory;
   
@@ -74,6 +86,7 @@ export interface RecipeComponent {
 
 export interface Recipe {
   id: string;
+  userId?: string; // Data Privacy Field
   name: string;
   type: RecipeType;
   components: RecipeComponent[];
@@ -107,6 +120,7 @@ export interface DishComponent {
 
 export interface Dish {
   id: string;
+  userId?: string; // Data Privacy Field
   name: string;
   category: string;
   description: string; // Menu-ready
@@ -124,6 +138,7 @@ export interface Dish {
 
 export interface Menu {
   id: string;
+  userId?: string; // Data Privacy Field
   name: string;
   description: string;
   dishIds: string[];

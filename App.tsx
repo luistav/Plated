@@ -7,7 +7,8 @@ import {
   Menu,
   Supplier,
   IngredientCategory, 
-  DishStatus 
+  DishStatus,
+  UserProfile
 } from './types';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
@@ -18,10 +19,20 @@ import DishModule from './components/DishModule';
 import MenuModule from './components/MenuModule';
 import SupplierModule from './components/SupplierModule';
 import LogicDocumentation from './components/LogicDocumentation';
+import ProfileModule from './components/ProfileModule';
 import Auth from './components/Auth';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
+import { DbService } from './services/db';
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
+import { 
+  doc, 
+  getDoc, 
+  collection, 
+  writeBatch,
+  getDocs
+} from "firebase/firestore";
 
+// --- INITIAL SEED DATA ---
 const INITIAL_SUPPLIERS: Supplier[] = [
   { id: 'sup-1', name: 'Fine Foods Co.', deliveryDays: ['Mon', 'Thu'], minOrder: 150, contactEmail: 'orders@finefoods.com', contactPhone: '0400000000', repName: 'Sarah Jenkins', repMobile: '0411111111', repEmail: 'sarah@finefoods.com', notes: 'Cutoff 10pm prior day.' },
   { id: 'sup-2', name: 'Dairy Direct', deliveryDays: ['Mon', 'Wed', 'Fri'], minOrder: 50, contactEmail: 'orders@dairydirect.com', contactPhone: '0299999999', repName: 'Mike Ross', repMobile: '0422222222', repEmail: 'mike@dairydirect.com', notes: '' },
@@ -125,22 +136,107 @@ const INITIAL_MENUS: Menu[] = [
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'ingredients' | 'recipes' | 'dishes' | 'menus' | 'suppliers' | 'logic'>('dashboard');
-  const [ingredients, setIngredients] = useState<Ingredient[]>(INITIAL_INGREDIENTS);
-  const [recipes, setRecipes] = useState<Recipe[]>(INITIAL_RECIPES);
-  const [dishes, setDishes] = useState<Dish[]>(INITIAL_DISHES);
-  const [menus, setMenus] = useState<Menu[]>(INITIAL_MENUS);
-  const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'ingredients' | 'recipes' | 'dishes' | 'menus' | 'suppliers' | 'logic' | 'profile'>('dashboard');
+  
+  // Data State - Initially empty, populated by Firestore
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [dishes, setDishes] = useState<Dish[]>([]);
+  const [menus, setMenus] = useState<Menu[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
+  // 1. Auth & User Profile Listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      
+      if (currentUser) {
+         try {
+           const docRef = doc(db, "users", currentUser.uid);
+           const docSnap = await getDoc(docRef);
+           if (docSnap.exists()) {
+              setUserProfile(docSnap.data() as UserProfile);
+           } else {
+             setUserProfile({
+               uid: currentUser.uid,
+               email: currentUser.email || '',
+               displayName: currentUser.displayName || '',
+               photoURL: currentUser.photoURL || '',
+               role: 'Chef'
+             });
+           }
+         } catch (e) {
+           console.error("Error fetching user profile", e);
+         }
+      } else {
+         setUserProfile(null);
+         // Clear data on logout
+         setIngredients([]);
+         setRecipes([]);
+         setDishes([]);
+         setMenus([]);
+         setSuppliers([]);
+      }
+      
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
+
+  // 2. Data Subscriptions via DbService
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubIngredients = DbService.subscribe(user.uid, 'ingredients', setIngredients);
+    const unsubRecipes = DbService.subscribe(user.uid, 'recipes', setRecipes);
+    const unsubDishes = DbService.subscribe(user.uid, 'dishes', setDishes);
+    const unsubMenus = DbService.subscribe(user.uid, 'menus', setMenus);
+    const unsubSuppliers = DbService.subscribe(user.uid, 'suppliers', setSuppliers);
+
+    return () => {
+      unsubIngredients();
+      unsubRecipes();
+      unsubDishes();
+      unsubMenus();
+      unsubSuppliers();
+    };
+  }, [user]);
+
+  // 3. Initial Seeding Logic (Run once when user loads)
+  useEffect(() => {
+    const seedData = async () => {
+      if (!user) return;
+      
+      try {
+        const ingsRef = collection(db, "users", user.uid, "ingredients");
+        const snapshot = await getDocs(ingsRef);
+        
+        if (snapshot.empty) {
+          console.log("Seeding initial data for new user...");
+          const batch = writeBatch(db);
+
+          // Use DbService helper logic manually or directly via batch
+          await DbService.seed(user.uid, 'suppliers', INITIAL_SUPPLIERS, batch);
+          await DbService.seed(user.uid, 'ingredients', INITIAL_INGREDIENTS, batch);
+          await DbService.seed(user.uid, 'recipes', INITIAL_RECIPES, batch);
+          await DbService.seed(user.uid, 'dishes', INITIAL_DISHES, batch);
+          await DbService.seed(user.uid, 'menus', INITIAL_MENUS, batch);
+
+          await batch.commit();
+          console.log("Seeding complete.");
+        }
+      } catch (e) {
+        console.error("Error seeding data:", e);
+      }
+    };
+
+    if (user && !loading) {
+      seedData();
+    }
+  }, [user, loading]);
 
   const handleSignOut = async () => {
     try {
@@ -150,11 +246,11 @@ const App: React.FC = () => {
     }
   };
 
-  // Calculates cost per BASE unit (g, ml, or unit)
+  // --- Calculations ---
+
   const getIngredientUnitCost = (ing: Ingredient): number => {
     let divisor = ing.packSize;
     if (ing.packUnit === 'kg' || ing.packUnit === 'L') divisor *= 1000;
-    // Prevent division by zero
     if (divisor === 0) return 0;
     const baseCost = ing.price / divisor;
     return baseCost * (100 / (ing.yieldPercent || 100));
@@ -169,7 +265,6 @@ const App: React.FC = () => {
         const baseCost = getIngredientUnitCost(ing);
         let quantityInBase = comp.quantity;
         
-        // Normalize quantity if using large units
         if (comp.unit === 'kg' && (ing.packUnit === 'kg' || ing.packUnit === 'g')) {
           quantityInBase *= 1000;
         } else if (comp.unit === 'L' && (ing.packUnit === 'L' || ing.packUnit === 'ml')) {
@@ -183,7 +278,6 @@ const App: React.FC = () => {
         
         const subTotalCost = getRecipeCost(sub);
         
-        // Normalize sub-recipe yield to base units
         let subYieldInBase = sub.yieldQuantity;
         if (sub.yieldUnit === 'kg' || sub.yieldUnit === 'L') subYieldInBase *= 1000;
         if (subYieldInBase === 0) return acc;
@@ -235,17 +329,42 @@ const App: React.FC = () => {
     return { food, packaging, total: food + packaging };
   };
 
-  // State Updates - Using functional updates to handle batching correctly (e.g. bulk import from invoice)
-  const addIngredient = (ing: Ingredient) => setIngredients(prev => [...prev, ing]);
-  const updateIngredient = (updated: Ingredient) => setIngredients(prev => prev.map(i => i.id === updated.id ? updated : i));
-  const addRecipe = (rec: Recipe) => setRecipes(prev => [...prev, rec]);
-  const updateRecipe = (updated: Recipe) => setRecipes(prev => prev.map(r => r.id === updated.id ? updated : r));
-  const addDish = (dish: Dish) => setDishes(prev => [...prev, dish]);
-  const updateDish = (updated: Dish) => setDishes(prev => prev.map(d => d.id === updated.id ? updated : d));
-  const addMenu = (menu: Menu) => setMenus(prev => [...prev, menu]);
-  const updateMenu = (updated: Menu) => setMenus(prev => prev.map(m => m.id === updated.id ? updated : m));
-  const addSupplier = (sup: Supplier) => setSuppliers(prev => [...prev, sup]);
-  const updateSupplier = (updated: Supplier) => setSuppliers(prev => prev.map(s => s.id === updated.id ? updated : s));
+  // --- CRUD Wrappers ---
+
+  const addIngredient = (ing: Ingredient) => user && DbService.add(user.uid, 'ingredients', ing);
+  const updateIngredient = (updated: Ingredient) => user && DbService.update(user.uid, 'ingredients', updated);
+  const deleteIngredient = (id: string) => {
+    console.log("App: Requesting delete for ingredient", id);
+    if(user) DbService.delete(user.uid, 'ingredients', id);
+  }
+
+  const addRecipe = (rec: Recipe) => user && DbService.add(user.uid, 'recipes', rec);
+  const updateRecipe = (updated: Recipe) => user && DbService.update(user.uid, 'recipes', updated);
+  const deleteRecipe = (id: string) => {
+    console.log("App: Requesting delete for recipe", id);
+    if(user) DbService.delete(user.uid, 'recipes', id);
+  }
+
+  const addDish = (dish: Dish) => user && DbService.add(user.uid, 'dishes', dish);
+  const updateDish = (updated: Dish) => user && DbService.update(user.uid, 'dishes', updated);
+  const deleteDish = (id: string) => {
+    console.log("App: Requesting delete for dish", id);
+    if(user) DbService.delete(user.uid, 'dishes', id);
+  }
+
+  const addMenu = (menu: Menu) => user && DbService.add(user.uid, 'menus', menu);
+  const updateMenu = (updated: Menu) => user && DbService.update(user.uid, 'menus', updated);
+  const deleteMenu = (id: string) => {
+    console.log("App: Requesting delete for menu", id);
+    if(user) DbService.delete(user.uid, 'menus', id);
+  }
+
+  const addSupplier = (sup: Supplier) => user && DbService.add(user.uid, 'suppliers', sup);
+  const updateSupplier = (updated: Supplier) => user && DbService.update(user.uid, 'suppliers', updated);
+  const deleteSupplier = (id: string) => {
+    console.log("App: Requesting delete for supplier", id);
+    if(user) DbService.delete(user.uid, 'suppliers', id);
+  }
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-stone-50"><i className="fas fa-circle-notch fa-spin text-stone-300 text-2xl"></i></div>;
@@ -259,7 +378,7 @@ const App: React.FC = () => {
     <div className="flex flex-col md:flex-row min-h-screen bg-stone-50 text-stone-900">
       {/* Sidebar hidden on mobile, visible on medium+ screens */}
       <div className="hidden md:block">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onSignOut={handleSignOut} userEmail={user.email} />
+        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onSignOut={handleSignOut} userProfile={userProfile} />
       </div>
 
       {/* Main Content */}
@@ -271,18 +390,24 @@ const App: React.FC = () => {
             </h1>
             <p className="text-xs md:text-base text-stone-500 mt-1">Mise en Place &bull; Culinary R&D Systems</p>
           </div>
-          <button onClick={handleSignOut} className="md:hidden text-stone-400 hover:text-stone-900">
-             <i className="fas fa-sign-out-alt"></i>
-          </button>
+          <div className="flex items-center gap-4">
+            <button onClick={() => setActiveTab('profile')} className="md:hidden">
+              <img src={userProfile?.photoURL || "https://ui-avatars.com/api/?name=Chef&background=random"} className="w-8 h-8 rounded-full bg-stone-200" alt="Profile" />
+            </button>
+            <button onClick={handleSignOut} className="md:hidden text-stone-400 hover:text-stone-900">
+              <i className="fas fa-sign-out-alt"></i>
+            </button>
+          </div>
         </header>
 
         {activeTab === 'dashboard' && <Dashboard ingredientsCount={ingredients.length} recipesCount={recipes.length} dishesCount={dishes.length} recentIngredients={ingredients.slice(-3)} />}
-        {activeTab === 'ingredients' && <IngredientModule ingredients={ingredients} suppliers={suppliers} onAdd={addIngredient} onUpdate={updateIngredient} getUnitCost={getIngredientUnitCost} onAddSupplier={addSupplier} />}
-        {activeTab === 'recipes' && <RecipeModule recipes={recipes} ingredients={ingredients} getRecipeCost={getRecipeCost} getIngredientUnitCost={getIngredientUnitCost} onAdd={addRecipe} onUpdate={updateRecipe} />}
-        {activeTab === 'dishes' && <DishModule dishes={dishes} recipes={recipes} ingredients={ingredients} getDishCostBreakdown={getDishCostBreakdown} onAdd={addDish} onUpdate={updateDish} />}
-        {activeTab === 'menus' && <MenuModule menus={menus} dishes={dishes} recipes={recipes} ingredients={ingredients} getDishCostBreakdown={getDishCostBreakdown} onAdd={addMenu} onUpdate={updateMenu} />}
-        {activeTab === 'suppliers' && <SupplierModule suppliers={suppliers} ingredients={ingredients} onAdd={addSupplier} onUpdate={updateSupplier} />}
+        {activeTab === 'ingredients' && <IngredientModule ingredients={ingredients} suppliers={suppliers} onAdd={addIngredient} onUpdate={updateIngredient} onDelete={deleteIngredient} getUnitCost={getIngredientUnitCost} onAddSupplier={addSupplier} />}
+        {activeTab === 'recipes' && <RecipeModule recipes={recipes} ingredients={ingredients} getRecipeCost={getRecipeCost} getIngredientUnitCost={getIngredientUnitCost} onAdd={addRecipe} onUpdate={updateRecipe} onDelete={deleteRecipe} />}
+        {activeTab === 'dishes' && <DishModule dishes={dishes} recipes={recipes} ingredients={ingredients} getDishCostBreakdown={getDishCostBreakdown} onAdd={addDish} onUpdate={updateDish} onDelete={deleteDish} />}
+        {activeTab === 'menus' && <MenuModule menus={menus} dishes={dishes} recipes={recipes} ingredients={ingredients} getDishCostBreakdown={getDishCostBreakdown} onAdd={addMenu} onUpdate={updateMenu} onDelete={deleteMenu} />}
+        {activeTab === 'suppliers' && <SupplierModule suppliers={suppliers} ingredients={ingredients} onAdd={addSupplier} onUpdate={updateSupplier} onDelete={deleteSupplier} />}
         {activeTab === 'logic' && <LogicDocumentation />}
+        {activeTab === 'profile' && userProfile && <ProfileModule userProfile={userProfile} onUpdateProfile={(p) => setUserProfile(p)} />}
       </main>
 
       {/* Mobile Navigation */}

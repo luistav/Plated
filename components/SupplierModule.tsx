@@ -7,9 +7,10 @@ interface SupplierModuleProps {
   ingredients: Ingredient[];
   onAdd: (s: Supplier) => void;
   onUpdate: (s: Supplier) => void;
+  onDelete: (id: string) => void;
 }
 
-const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients, onAdd, onUpdate }) => {
+const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients, onAdd, onUpdate, onDelete }) => {
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [formData, setFormData] = useState<Partial<Supplier>>({});
@@ -20,6 +21,13 @@ const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients,
     setSelectedSupplier(s);
     setFormData(s);
     setView('form');
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this supplier?")) {
+       onDelete(id);
+       if (selectedSupplier?.id === id) setView('list');
+    }
   };
 
   const handleCreate = () => {
@@ -81,7 +89,15 @@ const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients,
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {suppliers.map(sup => (
-              <div key={sup.id} className="bg-white p-6 rounded-2xl border border-stone-200 hover:shadow-md transition-all group">
+              <div key={sup.id} className="bg-white p-6 rounded-2xl border border-stone-200 hover:shadow-md transition-all group relative">
+                {/* Delete Button (Sibling) */}
+                <button 
+                   onClick={() => handleDelete(sup.id)}
+                   className="absolute top-4 right-14 w-8 h-8 rounded-full bg-white border border-stone-200 text-stone-300 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-all z-20 cursor-pointer"
+                >
+                   <i className="fas fa-trash-alt text-xs pointer-events-none"></i>
+                </button>
+
                 <div className="flex justify-between items-start mb-4">
                   <h4 className="font-bold text-lg text-stone-900">{sup.name}</h4>
                   <button onClick={() => handleEdit(sup)} className="text-stone-300 hover:text-stone-900 transition-colors">
@@ -182,7 +198,7 @@ const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients,
                          className="w-full bg-stone-50 border-stone-200 border rounded-xl p-3 text-sm outline-none"
                          value={formData.repName || ''}
                          onChange={e => setFormData({...formData, repName: e.target.value})}
-                       />
+                         />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                        <div className="space-y-2">
@@ -249,13 +265,20 @@ const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients,
               <button onClick={() => setView('list')} className="text-stone-400 hover:text-stone-900 transition-colors">
                  <i className="fas fa-arrow-left text-xl"></i>
               </button>
-              <div>
+              <div className="flex-1">
                  <h1 className="text-3xl font-bold serif text-stone-900">{selectedSupplier.name}</h1>
                  <p className="text-stone-500 text-sm">Supplier Profile & Catalog</p>
               </div>
+              <button 
+                onClick={() => handleDelete(selectedSupplier.id)} 
+                className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors cursor-pointer"
+              >
+                 DELETE
+              </button>
            </div>
 
            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* ... (Existing Detail View Code) ... */}
               <div className="md:col-span-1 space-y-6">
                  <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
                     <h3 className="text-xs font-black uppercase text-stone-400 tracking-widest">Contact Info</h3>

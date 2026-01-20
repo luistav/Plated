@@ -2,6 +2,8 @@
 import React, { useState, useRef } from 'react';
 import { Dish, Recipe, Ingredient, DishStatus, DishComponent, PlatingStep, UnitOfMeasure } from '../types';
 import { GoogleGenAI } from "@google/genai";
+import { storage } from '../firebase';
+import { ref, uploadString, getDownloadURL } from "firebase/storage";
 
 interface DishModuleProps {
   dishes: Dish[];
@@ -10,12 +12,20 @@ interface DishModuleProps {
   getDishCostBreakdown: (dish: Dish) => { food: number, packaging: number, total: number };
   onAdd: (dish: Dish) => void;
   onUpdate: (dish: Dish) => void;
+  onDelete: (id: string) => void;
 }
 
-const DishModule: React.FC<DishModuleProps> = ({ dishes, recipes, ingredients, getDishCostBreakdown, onAdd, onUpdate }) => {
+const DishModule: React.FC<DishModuleProps> = ({ dishes, recipes, ingredients, getDishCostBreakdown, onAdd, onUpdate, onDelete }) => {
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const [showCreator, setShowCreator] = useState(false);
   const [editingDish, setEditingDish] = useState<Dish | null>(null);
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this dish concept?")) {
+      onDelete(id);
+      if (selectedDish?.id === id) setSelectedDish(null);
+    }
+  };
 
   return (
     <>
@@ -52,42 +62,49 @@ const DishModule: React.FC<DishModuleProps> = ({ dishes, recipes, ingredients, g
               const foodCost = dish.sellingPrice > 0 ? (total / dish.sellingPrice) * 100 : 0;
               
               return (
-                <div 
-                  key={dish.id} 
-                  onClick={() => setSelectedDish(dish)}
-                  className="group bg-white rounded-3xl border border-stone-200 overflow-hidden cursor-pointer hover:border-stone-400 hover:shadow-xl transition-all duration-300"
-                >
-                  <div className="h-48 md:h-56 relative overflow-hidden">
-                    <img 
-                      src={dish.heroImage || `https://picsum.photos/seed/${dish.id}/600/400`} 
-                      className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-1000" 
-                      alt={dish.name}
-                    />
-                    <div className="absolute top-4 right-4">
-                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase text-white shadow-lg ${
-                        dish.status === DishStatus.RD ? 'bg-amber-500' :
-                        dish.status === DishStatus.Testing ? 'bg-blue-500' :
-                        dish.status === DishStatus.Live ? 'bg-emerald-600' : 'bg-stone-400'
-                      }`}>
-                        {dish.status}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-6 md:p-8">
-                    <p className="text-[10px] font-bold text-stone-400 uppercase tracking-[.2em] mb-2">{dish.category}</p>
-                    <h3 className="text-xl md:text-2xl font-bold serif text-stone-900 mb-2 group-hover:text-stone-700 transition-colors">{dish.name}</h3>
-                    <p className="text-xs text-stone-400 line-clamp-2 mb-6 italic leading-relaxed">"{dish.description}"</p>
-                    
-                    <div className="flex justify-between items-end pt-6 border-t border-stone-100">
-                      <div>
-                        <p className="text-[10px] text-stone-400 font-bold uppercase mb-1">Plate Cost</p>
-                        <p className="text-lg font-black text-stone-900">${total.toFixed(2)}</p>
+                <div key={dish.id} className="group relative bg-white rounded-3xl border border-stone-200 overflow-hidden hover:border-stone-400 hover:shadow-xl transition-all duration-300">
+                  {/* Delete Icon (Sibling) */}
+                  <button 
+                       onClick={() => handleDelete(dish.id)}
+                       className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/90 text-stone-400 hover:text-rose-500 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all z-20 cursor-pointer"
+                  >
+                       <i className="fas fa-trash-alt text-xs pointer-events-none"></i>
+                  </button>
+
+                  {/* Clickable Content */}
+                  <div onClick={() => setSelectedDish(dish)} className="cursor-pointer">
+                      <div className="h-48 md:h-56 relative overflow-hidden">
+                        <img 
+                          src={dish.heroImage || `https://picsum.photos/seed/${dish.id}/600/400`} 
+                          className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-1000" 
+                          alt={dish.name}
+                        />
+                        <div className="absolute top-4 right-4">
+                          <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase text-white shadow-lg ${
+                            dish.status === DishStatus.RD ? 'bg-amber-500' :
+                            dish.status === DishStatus.Testing ? 'bg-blue-500' :
+                            dish.status === DishStatus.Live ? 'bg-emerald-600' : 'bg-stone-400'
+                          }`}>
+                            {dish.status}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-stone-400 font-bold uppercase mb-1">Food Cost</p>
-                        <p className={`text-lg font-black ${foodCost > 30 ? 'text-rose-600' : foodCost > 25 ? 'text-amber-500' : 'text-emerald-600'}`}>{foodCost.toFixed(1)}%</p>
+                      <div className="p-6 md:p-8">
+                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-[.2em] mb-2">{dish.category}</p>
+                        <h3 className="text-xl md:text-2xl font-bold serif text-stone-900 mb-2 group-hover:text-stone-700 transition-colors">{dish.name}</h3>
+                        <p className="text-xs text-stone-400 line-clamp-2 mb-6 italic leading-relaxed">"{dish.description}"</p>
+                        
+                        <div className="flex justify-between items-end pt-6 border-t border-stone-100">
+                          <div>
+                            <p className="text-[10px] text-stone-400 font-bold uppercase mb-1">Plate Cost</p>
+                            <p className="text-lg font-black text-stone-900">${total.toFixed(2)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-stone-400 font-bold uppercase mb-1">Food Cost</p>
+                            <p className={`text-lg font-black ${foodCost > 30 ? 'text-rose-600' : foodCost > 25 ? 'text-amber-500' : 'text-emerald-600'}`}>{foodCost.toFixed(1)}%</p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
                   </div>
                 </div>
               );
@@ -123,6 +140,7 @@ const DishModule: React.FC<DishModuleProps> = ({ dishes, recipes, ingredients, g
   );
 };
 
+// ... (Rest of DishConceptView remains unchanged)
 // --- Sub Component: DishConceptView ---
 
 interface DishConceptViewProps {
@@ -277,6 +295,7 @@ const DishCreator: React.FC<DishCreatorProps> = ({ recipes, ingredients, existin
 
   const [isGeneratingName, setIsGeneratingName] = useState(false);
   const [isRefiningDesc, setIsRefiningDesc] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const generateName = async () => {
@@ -375,25 +394,44 @@ const DishCreator: React.FC<DishCreatorProps> = ({ recipes, ingredients, existin
     setForm({ ...form, platingSteps: updated });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name || !form.sellingPrice) return alert('Name and Selling Price are mandatory.');
-    const dish: Dish = {
-      id: form.id || `dish-${Date.now()}`,
-      name: form.name || '',
-      category: form.category || 'Mains',
-      description: form.description || '',
-      internalNotes: form.internalNotes || '',
-      status: form.status as DishStatus,
-      flavorProfile: form.flavorProfile || [],
-      components: (form.components || []) as DishComponent[],
-      platingSteps: (form.platingSteps || []) as PlatingStep[],
-      sellingPrice: Number(form.sellingPrice) || 0,
-      heroImage: form.heroImage || 'https://images.unsplash.com/photo-1546241072-48010ad28c2c?q=80&w=800&auto=format&fit=crop',
-      gallery: form.gallery || [],
-      inspirationLinks: form.inspirationLinks || [],
-      lastUpdated: Date.now()
-    };
-    onSave(dish);
+    
+    setIsSaving(true);
+    
+    try {
+        let imageUrl = form.heroImage || 'https://images.unsplash.com/photo-1546241072-48010ad28c2c?q=80&w=800&auto=format&fit=crop';
+
+        // Check if image is base64 (needs upload)
+        if (imageUrl.startsWith('data:')) {
+            const imageRef = ref(storage, `dish_images/${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+            await uploadString(imageRef, imageUrl, 'data_url');
+            imageUrl = await getDownloadURL(imageRef);
+        }
+
+        const dish: Dish = {
+          id: form.id || `dish-${Date.now()}`,
+          name: form.name || '',
+          category: form.category || 'Mains',
+          description: form.description || '',
+          internalNotes: form.internalNotes || '',
+          status: form.status as DishStatus,
+          flavorProfile: form.flavorProfile || [],
+          components: (form.components || []) as DishComponent[],
+          platingSteps: (form.platingSteps || []) as PlatingStep[],
+          sellingPrice: Number(form.sellingPrice) || 0,
+          heroImage: imageUrl,
+          gallery: form.gallery || [],
+          inspirationLinks: form.inspirationLinks || [],
+          lastUpdated: Date.now()
+        };
+        onSave(dish);
+    } catch (error) {
+        console.error("Error saving dish:", error);
+        alert("Failed to save dish. Please check your connection and try again.");
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   return (
@@ -420,7 +458,7 @@ const DishCreator: React.FC<DishCreatorProps> = ({ recipes, ingredients, existin
                             <button 
                               type="button" 
                               onClick={generateName} 
-                              disabled={isGeneratingName} 
+                              disabled={isGeneratingName || isSaving} 
                               className="text-[10px] font-bold text-amber-600 hover:text-amber-800 flex items-center gap-1 transition-colors disabled:opacity-50"
                             >
                                {isGeneratingName ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-magic"></i>}
@@ -503,7 +541,7 @@ const DishCreator: React.FC<DishCreatorProps> = ({ recipes, ingredients, existin
                              <button 
                                type="button" 
                                onClick={refineDescription} 
-                               disabled={isRefiningDesc} 
+                               disabled={isRefiningDesc || isSaving} 
                                className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors disabled:opacity-50"
                             >
                                  {isRefiningDesc ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-sparkles"></i>}
@@ -664,8 +702,9 @@ const DishCreator: React.FC<DishCreatorProps> = ({ recipes, ingredients, existin
           </div>
 
           <div className="px-6 py-4 md:px-12 md:py-8 border-t border-stone-100 bg-stone-50 flex flex-col md:flex-row justify-end gap-4 shrink-0">
-             <button onClick={onClose} className="w-full md:w-auto px-8 py-3 rounded-2xl text-sm font-bold text-stone-400 hover:text-stone-900 transition-all bg-white md:bg-transparent border md:border-0 border-stone-200">Discard</button>
-             <button onClick={handleSave} className="w-full md:w-auto bg-stone-900 text-white px-12 py-3 rounded-2xl text-sm font-bold shadow-2xl hover:bg-stone-800 transition-all">
+             <button onClick={onClose} disabled={isSaving} className="w-full md:w-auto px-8 py-3 rounded-2xl text-sm font-bold text-stone-400 hover:text-stone-900 transition-all bg-white md:bg-transparent border md:border-0 border-stone-200">Discard</button>
+             <button onClick={handleSave} disabled={isSaving} className="w-full md:w-auto bg-stone-900 text-white px-12 py-3 rounded-2xl text-sm font-bold shadow-2xl hover:bg-stone-800 transition-all flex items-center justify-center gap-2">
+                {isSaving && <i className="fas fa-circle-notch fa-spin"></i>}
                 {existingDish ? 'UPDATE' : 'SAVE CONCEPT'}
              </button>
           </div>

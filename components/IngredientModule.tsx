@@ -8,6 +8,7 @@ interface IngredientModuleProps {
   suppliers: Supplier[]; 
   onAdd: (ing: Ingredient) => void;
   onUpdate: (ing: Ingredient) => void;
+  onDelete: (id: string) => void;
   getUnitCost: (ing: Ingredient) => number;
   onAddSupplier: (s: Supplier) => void;
 }
@@ -32,7 +33,7 @@ interface ReconciledItem extends ScannedItem {
   matchConfidence: number; // 0-1
 }
 
-const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppliers, onAdd, onUpdate, getUnitCost, onAddSupplier }) => {
+const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppliers, onAdd, onUpdate, onDelete, getUnitCost, onAddSupplier }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -107,7 +108,7 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
       
       // Root fields (Standard/Active)
       supplier: currentSupplierName,
-      supplierId: formData.supplierId || linkedSupplier?.id,
+      supplierId: formData.supplierId || linkedSupplier?.id || '',
       packSize: Number(formData.packSize) || 0,
       packUnit: formData.packUnit as UnitOfMeasure,
       price: currentPrice,
@@ -128,6 +129,13 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
     resetForm();
   };
 
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this ingredient?")) {
+       onDelete(id);
+       if (editingId === id) resetForm();
+    }
+  };
+
   const handleEdit = (ing: Ingredient) => {
     setFormData({ 
        ...ing, 
@@ -145,8 +153,7 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
     setFormData({ category: IngredientCategory.Produce, yieldPercent: 100, packUnit: 'kg', alternativeSuppliers: [], priceHistory: [] });
   };
 
-  // --- Multi-Supplier Logic ---
-
+  // ... (Alternative Supplier Logic - unchanged)
   const addAlternativeSupplier = () => {
     setFormData({
       ...formData,
@@ -161,7 +168,6 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
      const updated = [...(formData.alternativeSuppliers || [])];
      updated[index] = { ...updated[index], [field]: value };
      
-     // If supplierId changes, update name automatically
      if (field === 'supplierId') {
         const s = suppliers.find(sup => sup.id === value);
         if (s) updated[index].supplierName = s.name;
@@ -180,7 +186,6 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
      const alt = formData.alternativeSuppliers?.[index];
      if (!alt) return;
 
-     // 1. Capture the CURRENT standard details to save them as an alternative
      const currentStandardAsAlternative: IngredientPricing = {
        supplierId: formData.supplierId || '',
        supplierName: formData.supplier || 'Previous Standard',
@@ -189,36 +194,27 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
        packUnit: (formData.packUnit || 'kg') as UnitOfMeasure
      };
 
-     // 2. Create a copy of the alternatives list
      const updatedAlternatives = [...(formData.alternativeSuppliers || [])];
-
-     // 3. Swap: Place the OLD standard into the slot where the NEW standard used to be
      updatedAlternatives[index] = currentStandardAsAlternative;
 
-     // 4. Update the main form state
      setFormData({
         ...formData,
-        // Set new Standard details from the selected alternative
         supplier: alt.supplierName,
         supplierId: alt.supplierId,
         price: alt.price,
         packSize: alt.packSize,
         packUnit: alt.packUnit,
-        
-        // Update the list with the swapped item
         alternativeSuppliers: updatedAlternatives
      });
   };
 
-  // --- Visualization Helpers ---
+  // ... (Visualization Helpers - unchanged)
   const getPriceTrend = (history: PriceHistoryEntry[]) => {
     if (!history || history.length < 2) return null;
     const latest = history[0];
     const previous = history[1];
-    
     const diff = latest.price - previous.price;
     const percent = (diff / previous.price) * 100;
-    
     return {
        direction: diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat',
        percent: Math.abs(percent).toFixed(1)
@@ -420,7 +416,7 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
                          <div>
                             <p className="text-[10px] font-bold uppercase text-stone-400 tracking-widest">Latest Movement</p>
                             {(() => {
-                               const trend = getPriceTrend(formData.priceHistory);
+                               const trend = getPriceTrend(formData.priceHistory!);
                                if (!trend) return <p className="text-sm font-bold mt-1">Insufficient Data</p>;
                                return (
                                   <div className="flex items-center gap-2 mt-1">
@@ -525,7 +521,7 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
                         </div>
                         <div className="col-span-2">
                            <select 
-                             className="w-full bg-white border border-stone-200 rounded p-2 text-xs outline-none"
+                             className="w-full bg-white border-stone-200 rounded p-2 text-xs outline-none"
                              value={alt.packUnit}
                              onChange={(e) => updateAlternative(idx, 'packUnit', e.target.value)}
                            >
@@ -578,8 +574,17 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
                />
              </div>
 
-           <div className="flex justify-end pt-4 border-t border-stone-100">
-             <button type="submit" className="bg-stone-900 text-white px-8 py-3 rounded-xl font-bold text-sm hover:bg-stone-800 transition-all shadow-lg">
+           <div className="flex justify-between pt-4 border-t border-stone-100">
+             {editingId && (
+               <button 
+                  type="button" 
+                  onClick={() => handleDelete(editingId)}
+                  className="text-rose-500 px-6 py-3 rounded-xl font-bold text-sm hover:bg-rose-50 transition-all border border-transparent hover:border-rose-100"
+               >
+                 DELETE ITEM
+               </button>
+             )}
+             <button type="submit" className="bg-stone-900 text-white px-8 py-3 rounded-xl font-bold text-sm hover:bg-stone-800 transition-all shadow-lg ml-auto">
                {editingId ? 'UPDATE ITEM' : 'SAVE ITEM'}
              </button>
            </div>
@@ -597,38 +602,48 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
            
            <div className="divide-y divide-stone-100">
               {filteredIngredients.length > 0 ? filteredIngredients.map(ing => (
-                <div 
-                  key={ing.id} 
-                  onClick={() => handleEdit(ing)}
-                  className="group grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-6 py-4 items-center hover:bg-stone-50 transition-colors cursor-pointer"
-                >
-                   {/* ... (Existing List Item Render) ... */}
-                   <div className="md:col-span-3 flex justify-between md:block">
-                      <span className="font-semibold text-stone-900 text-sm md:text-sm">{ing.name}</span>
-                      <span className="md:hidden text-[10px] font-bold uppercase bg-stone-100 px-2 py-1 rounded text-stone-500">{ing.category}</span>
+                <div key={ing.id} className="group relative hover:bg-stone-50 transition-colors">
+                   {/* Clickable Area for Edit */}
+                   <div 
+                      onClick={() => handleEdit(ing)}
+                      className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-6 py-4 items-center cursor-pointer"
+                   >
+                       {/* Content */}
+                       <div className="md:col-span-3 flex justify-between md:block">
+                          <span className="font-semibold text-stone-900 text-sm md:text-sm">{ing.name}</span>
+                          <span className="md:hidden text-[10px] font-bold uppercase bg-stone-100 px-2 py-1 rounded text-stone-500">{ing.category}</span>
+                       </div>
+                       
+                       <div className="hidden md:block col-span-2">
+                          <span className="text-[10px] font-bold uppercase bg-stone-100 px-2 py-1 rounded text-stone-500">{ing.category}</span>
+                       </div>
+                       
+                       <div className="md:col-span-3 text-xs text-stone-500">
+                          <span className="md:hidden font-bold mr-1 text-stone-400">Supplier:</span>
+                          {ing.supplier}
+                          {ing.alternativeSuppliers && ing.alternativeSuppliers.length > 0 && (
+                             <span className="ml-2 text-[9px] bg-stone-100 text-stone-400 px-1 rounded-full px-1.5" title={`${ing.alternativeSuppliers.length} alternatives available`}>+{ing.alternativeSuppliers.length}</span>
+                          )}
+                       </div>
+                       
+                       <div className="md:col-span-2 text-left md:text-right text-xs md:text-sm font-mono text-stone-600 flex justify-between md:block mt-1 md:mt-0">
+                          <span className="md:hidden text-stone-400">Pack:</span>
+                          <span>${ing.price.toFixed(2)} / {ing.packSize}{ing.packUnit}</span>
+                       </div>
+                       
+                       <div className="md:col-span-2 text-left md:text-right text-xs md:text-sm font-mono font-bold text-emerald-700 flex justify-between md:block">
+                          <span className="md:hidden text-stone-400">Unit Base:</span>
+                          <span>${getUnitCost(ing).toFixed(2)} / {ing.packUnit === 'kg' ? 'g' : ing.packUnit === 'L' ? 'ml' : ing.packUnit}</span>
+                       </div>
                    </div>
-                   
-                   <div className="hidden md:block col-span-2">
-                      <span className="text-[10px] font-bold uppercase bg-stone-100 px-2 py-1 rounded text-stone-500">{ing.category}</span>
-                   </div>
-                   
-                   <div className="md:col-span-3 text-xs text-stone-500">
-                      <span className="md:hidden font-bold mr-1 text-stone-400">Supplier:</span>
-                      {ing.supplier}
-                      {ing.alternativeSuppliers && ing.alternativeSuppliers.length > 0 && (
-                         <span className="ml-2 text-[9px] bg-stone-100 text-stone-400 px-1 rounded-full px-1.5" title={`${ing.alternativeSuppliers.length} alternatives available`}>+{ing.alternativeSuppliers.length}</span>
-                      )}
-                   </div>
-                   
-                   <div className="md:col-span-2 text-left md:text-right text-xs md:text-sm font-mono text-stone-600 flex justify-between md:block mt-1 md:mt-0">
-                      <span className="md:hidden text-stone-400">Pack:</span>
-                      <span>${ing.price.toFixed(2)} / {ing.packSize}{ing.packUnit}</span>
-                   </div>
-                   
-                   <div className="md:col-span-2 text-left md:text-right text-xs md:text-sm font-mono font-bold text-emerald-700 flex justify-between md:block">
-                      <span className="md:hidden text-stone-400">Unit Base:</span>
-                      <span>${getUnitCost(ing).toFixed(2)} / {ing.packUnit === 'kg' ? 'g' : ing.packUnit === 'L' ? 'ml' : ing.packUnit}</span>
-                   </div>
+
+                   {/* Delete Button (Sibling, not child of clickable area) */}
+                   <button 
+                      onClick={() => handleDelete(ing.id)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white border border-stone-200 text-stone-400 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center shadow-sm z-10 md:opacity-0 md:group-hover:opacity-100 transition-all cursor-pointer"
+                   >
+                     <i className="fas fa-trash-alt text-xs"></i>
+                   </button>
                 </div>
               )) : (
                 <div className="p-8 text-center text-stone-400 italic">No ingredients found matching your search.</div>
@@ -640,24 +655,21 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
   );
 };
 
-// --- Sub Component: Invoice Scanner with Reconciliation ---
-
 interface InvoiceScannerProps {
-   onClose: () => void;
-   ingredients: Ingredient[];
-   suppliers: Supplier[];
-   onProcessBatch: (newIngs: Ingredient[], updatedIngs: Ingredient[], newSupplier?: Supplier) => void;
+  onClose: () => void;
+  ingredients: Ingredient[];
+  suppliers: Supplier[];
+  onProcessBatch: (newIngredients: Ingredient[], updatedIngredients: Ingredient[], newSupplier?: Supplier) => void;
 }
 
+// ... (InvoiceScanner component remains unchanged)
 const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, suppliers, onProcessBatch }) => {
+  // ... (Code from previous step)
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [reconciledItems, setReconciledItems] = useState<ReconciledItem[]>([]);
-  
-  // Supplier matching state
   const [detectedSupplierName, setDetectedSupplierName] = useState('');
   const [matchedSupplierId, setMatchedSupplierId] = useState<string>('new');
-  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -902,11 +914,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
                    }
                 ].sort((a,b) => b.date - a.date);
              }
-             // Update active supplier if it matches the invoice
-             if (original.supplierId !== finalSupplierId) {
-                // Logic: Should we switch the "Active" supplier? Let's say yes for now, or add to alternatives.
-                // For simplicity in this complex feature, let's update the main price.
-             }
              updatedIngredients.push(updated);
           }
        }
@@ -1133,4 +1140,3 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
 };
 
 export default IngredientModule;
-    

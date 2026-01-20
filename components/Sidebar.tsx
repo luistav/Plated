@@ -1,14 +1,15 @@
 
 import React from 'react';
+import { UserProfile } from '../types';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: any) => void;
   onSignOut: () => void;
-  userEmail?: string | null;
+  userProfile?: UserProfile | null;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onSignOut, userEmail }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onSignOut, userProfile }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: 'fa-chart-pie' },
     { id: 'menus', label: 'Menus', icon: 'fa-book-open' },
@@ -46,13 +47,21 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onSignOut, u
       </div>
       
       <div className="mt-auto p-8 border-t border-stone-800">
-        <div className="flex items-center gap-3 mb-4">
-          <img src="https://picsum.photos/seed/chef/40/40" className="w-10 h-10 rounded-full grayscale" alt="Chef profile" />
-          <div className="text-xs overflow-hidden">
-            <p className="text-white font-medium truncate">Chef</p>
-            <p className="text-stone-500 truncate" title={userEmail || ''}>{userEmail || 'Executive Chef'}</p>
+        <button 
+           onClick={() => setActiveTab('profile')}
+           className={`flex items-center gap-3 mb-4 w-full text-left rounded-lg p-2 transition-colors ${activeTab === 'profile' ? 'bg-stone-800' : 'hover:bg-stone-800/50'}`}
+        >
+          <img 
+            src={userProfile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile?.displayName || 'Chef')}&background=random`} 
+            className="w-10 h-10 rounded-full object-cover bg-stone-700" 
+            alt="Chef profile" 
+          />
+          <div className="text-xs overflow-hidden flex-1">
+            <p className="text-white font-medium truncate">{userProfile?.displayName || 'Chef'}</p>
+            <p className="text-stone-500 truncate" title={userProfile?.email}>{userProfile?.email || 'Executive Chef'}</p>
           </div>
-        </div>
+          <i className="fas fa-chevron-right text-xs text-stone-600"></i>
+        </button>
         <button 
           onClick={onSignOut}
           className="w-full flex items-center justify-center gap-2 text-xs font-bold bg-stone-800 hover:bg-stone-700 text-stone-300 py-2 rounded transition-colors"

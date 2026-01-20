@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Menu, Dish, Recipe, Ingredient } from '../types';
 
@@ -9,9 +10,10 @@ interface MenuModuleProps {
   getDishCostBreakdown: (dish: Dish) => { food: number, packaging: number, total: number };
   onAdd: (menu: Menu) => void;
   onUpdate: (menu: Menu) => void;
+  onDelete: (id: string) => void;
 }
 
-const MenuModule: React.FC<MenuModuleProps> = ({ menus, dishes, recipes, ingredients, getDishCostBreakdown, onAdd, onUpdate }) => {
+const MenuModule: React.FC<MenuModuleProps> = ({ menus, dishes, recipes, ingredients, getDishCostBreakdown, onAdd, onUpdate, onDelete }) => {
   const [viewMode, setViewMode] = useState<'list' | 'detail' | 'create' | 'edit'>('list');
   const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null);
 
@@ -25,6 +27,14 @@ const MenuModule: React.FC<MenuModuleProps> = ({ menus, dishes, recipes, ingredi
     setViewMode('list');
   };
 
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this menu?")) {
+      onDelete(id);
+      setSelectedMenu(null);
+      setViewMode('list');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {viewMode === 'list' && (
@@ -33,6 +43,7 @@ const MenuModule: React.FC<MenuModuleProps> = ({ menus, dishes, recipes, ingredi
           dishes={dishes}
           onCreate={() => { setSelectedMenu(null); setViewMode('create'); }} 
           onSelect={(menu) => { setSelectedMenu(menu); setViewMode('detail'); }}
+          onDelete={handleDelete}
         />
       )}
       
@@ -54,6 +65,7 @@ const MenuModule: React.FC<MenuModuleProps> = ({ menus, dishes, recipes, ingredi
           getDishCostBreakdown={getDishCostBreakdown}
           onBack={() => { setSelectedMenu(null); setViewMode('list'); }}
           onEdit={() => setViewMode('edit')}
+          onDelete={() => handleDelete(selectedMenu.id)}
         />
       )}
       
@@ -75,7 +87,7 @@ const MenuModule: React.FC<MenuModuleProps> = ({ menus, dishes, recipes, ingredi
 
 // --- Sub Components ---
 
-const MenuList = ({ menus, dishes, onCreate, onSelect }: { menus: Menu[], dishes: Dish[], onCreate: () => void, onSelect: (m: Menu) => void }) => {
+const MenuList = ({ menus, dishes, onCreate, onSelect, onDelete }: { menus: Menu[], dishes: Dish[], onCreate: () => void, onSelect: (m: Menu) => void, onDelete: (id: string) => void }) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20 md:pb-0">
       <div className="flex justify-between items-center">
@@ -92,27 +104,35 @@ const MenuList = ({ menus, dishes, onCreate, onSelect }: { menus: Menu[], dishes
         {menus.map(menu => {
           const dishCount = menu.dishIds.length;
           return (
-             <div 
-               key={menu.id} 
-               onClick={() => onSelect(menu)}
-               className="bg-white p-6 rounded-2xl border border-stone-200 hover:shadow-md transition-all cursor-pointer group"
-             >
-                <div className="flex justify-between items-start mb-4">
-                   <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${
-                     menu.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'
-                   }`}>
-                     {menu.status}
-                   </div>
-                   <span className="text-stone-300 group-hover:text-stone-900 transition-colors">
-                     <i className="fas fa-arrow-right"></i>
-                   </span>
-                </div>
-                <h3 className="text-xl font-bold serif text-stone-900 mb-2">{menu.name}</h3>
-                <p className="text-sm text-stone-500 line-clamp-2 mb-6">{menu.description}</p>
-                <div className="border-t border-stone-100 pt-4 flex gap-4 text-xs font-medium text-stone-600">
-                   <span className="flex items-center gap-2">
-                     <i className="fas fa-utensils text-stone-400"></i> {dishCount} Dish{dishCount !== 1 ? 'es' : ''}
-                   </span>
+             <div key={menu.id} className="group relative bg-white rounded-2xl border border-stone-200 hover:shadow-md transition-all">
+                {/* Trash Icon (Sibling) */}
+                <button 
+                   onClick={() => onDelete(menu.id)}
+                   className="absolute top-4 right-12 w-8 h-8 rounded-full bg-white border border-stone-200 text-stone-300 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-all z-20 cursor-pointer"
+                >
+                   <i className="fas fa-trash-alt text-xs"></i>
+                </button>
+
+                {/* Clickable Content */}
+                <div onClick={() => onSelect(menu)} className="p-6 cursor-pointer">
+                    <div className="flex justify-between items-start mb-4">
+                       <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${
+                         menu.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'
+                       }`}>
+                         {menu.status}
+                       </div>
+                       <span className="text-stone-300 group-hover:text-stone-900 transition-colors">
+                         <i className="fas fa-arrow-right"></i>
+                       </span>
+                    </div>
+
+                    <h3 className="text-xl font-bold serif text-stone-900 mb-2">{menu.name}</h3>
+                    <p className="text-sm text-stone-500 line-clamp-2 mb-6">{menu.description}</p>
+                    <div className="border-t border-stone-100 pt-4 flex gap-4 text-xs font-medium text-stone-600">
+                       <span className="flex items-center gap-2">
+                         <i className="fas fa-utensils text-stone-400"></i> {dishCount} Dish{dishCount !== 1 ? 'es' : ''}
+                       </span>
+                    </div>
                 </div>
              </div>
           );
@@ -236,10 +256,10 @@ const MenuEditor = ({ existingMenu, dishes, onSave, onCancel }: { existingMenu: 
 };
 
 const MenuDetail = ({ 
-  menu, dishes, recipes, ingredients, getDishCostBreakdown, onBack, onEdit 
+  menu, dishes, recipes, ingredients, getDishCostBreakdown, onBack, onEdit, onDelete 
 }: { 
   menu: Menu, dishes: Dish[], recipes: Recipe[], ingredients: Ingredient[], 
-  getDishCostBreakdown: (dish: Dish) => any, onBack: () => void, onEdit: () => void 
+  getDishCostBreakdown: (dish: Dish) => any, onBack: () => void, onEdit: () => void, onDelete: () => void 
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'bible'>('overview');
   const [bibleGrouping, setBibleGrouping] = useState<'dish' | 'type'>('dish');
@@ -310,6 +330,9 @@ const MenuDetail = ({
              <p className="text-stone-500 text-sm mt-1">{menu.description}</p>
           </div>
           <div className="flex gap-3">
+             <button onClick={onDelete} className="bg-white border border-rose-200 text-rose-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-rose-50 transition-all">
+                DELETE
+             </button>
              <button onClick={onEdit} className="bg-white border border-stone-200 text-stone-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-stone-50 transition-all">
                 EDIT MENU
              </button>
@@ -321,7 +344,8 @@ const MenuDetail = ({
              </button>
           </div>
        </div>
-
+       
+       {/* ... (Rest of the component remains unchanged) ... */}
        {/* Tabs - Hidden on Print */}
        <div className="flex gap-6 border-b border-stone-200 no-print">
           <button 
@@ -396,7 +420,7 @@ const MenuDetail = ({
             </div>
          </div>
        )}
-
+       {/* (Bible Tab Code is inherited from previous version and unchanged but correctly rendered) */}
        {activeTab === 'bible' && (
          <div className="space-y-6 print:space-y-0">
             {/* View Controls - Hidden Print */}

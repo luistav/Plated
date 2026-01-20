@@ -9,9 +9,10 @@ interface RecipeModuleProps {
   getIngredientUnitCost: (ing: Ingredient) => number;
   onAdd: (rec: Recipe) => void;
   onUpdate: (rec: Recipe) => void;
+  onDelete: (id: string) => void;
 }
 
-const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRecipeCost, getIngredientUnitCost, onAdd, onUpdate }) => {
+const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRecipeCost, getIngredientUnitCost, onAdd, onUpdate, onDelete }) => {
   const [showEditor, setShowEditor] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newRecipe, setNewRecipe] = useState<Partial<Recipe>>({
@@ -84,6 +85,12 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
     setShowEditor(true);
   };
 
+  const handleDelete = (id: string) => {
+     if (window.confirm("Are you sure you want to delete this recipe?")) {
+        onDelete(id);
+     }
+  };
+
   const handleSave = () => {
     if (!newRecipe.name) return alert('Recipe name is required');
     const rec: Recipe = {
@@ -127,74 +134,82 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
         {recipes.map(recipe => (
-          <div key={recipe.id} className="bg-white rounded-2xl border border-stone-200 overflow-hidden hover:shadow-md transition-all flex flex-col group">
-             <div className="bg-stone-50 px-6 py-4 flex justify-between items-center border-b border-stone-100">
-                <div>
-                   <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{recipe.type}</span>
-                   <h4 className="text-xl font-bold serif text-stone-900">{recipe.name}</h4>
-                </div>
-                <div className="flex gap-4 items-center">
-                   <div className="text-right">
-                      <p className="text-[10px] font-bold text-stone-400 uppercase">Total Yield</p>
-                      <p className="text-sm font-semibold text-stone-700">{recipe.yieldQuantity}{recipe.yieldUnit}</p>
-                   </div>
-                   <button 
-                     onClick={() => startEdit(recipe)}
-                     className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 hover:text-stone-900 hover:bg-stone-200 transition-all"
-                   >
-                     <i className="fas fa-edit text-xs"></i>
-                   </button>
-                </div>
-             </div>
-             
-             <div className="p-6 flex-1">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[300px]">
-                    <thead>
-                      <tr className="border-b border-stone-100 text-stone-400 font-bold uppercase">
-                        <th className="pb-2">Ingredient</th>
-                        <th className="pb-2 text-right">Qty</th>
-                        <th className="pb-2 text-right">Cost / Unit</th>
-                        <th className="pb-2 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recipe.components.map((comp, idx) => {
-                        const ingOrRec = comp.type === 'ingredient' 
-                          ? ingredients.find(i => i.id === comp.id) 
-                          : recipes.find(r => r.id === comp.id);
-                        const unitCost = getComponentUnitCost(comp);
-                        const lineTotal = getComponentTotalCost(comp);
-                        return (
-                          <tr key={idx} className="border-b border-stone-50 last:border-0 group-hover:bg-stone-50 transition-colors">
-                            <td className="py-2 font-medium text-stone-700">{ingOrRec?.name || 'Unknown Item'}</td>
-                            <td className="py-2 text-right text-stone-500 font-mono">{comp.quantity}{comp.unit}</td>
-                            <td className="py-2 text-right text-stone-400 font-mono">${unitCost.toFixed(3)}</td>
-                            <td className="py-2 text-right font-bold text-stone-800 font-mono">${lineTotal.toFixed(2)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {recipe.method.length > 0 && (
-                   <div className="mt-6 pt-6 border-t border-stone-100">
-                     <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">Method</p>
-                     <p className="text-xs text-stone-600 line-clamp-2 italic leading-relaxed">{recipe.method[0]}</p>
-                   </div>
-                )}
-             </div>
+          <div key={recipe.id} className="group relative bg-white rounded-2xl border border-stone-200 overflow-hidden hover:shadow-md transition-all flex flex-col">
+             {/* Delete Button (Sibling to content) */}
+             <button 
+                onClick={() => handleDelete(recipe.id)}
+                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white border border-stone-200 text-stone-300 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-all z-20 cursor-pointer"
+             >
+                <i className="fas fa-trash-alt text-xs pointer-events-none"></i>
+             </button>
 
-             <div className="px-6 py-4 bg-stone-50 flex justify-between items-center border-t border-stone-100">
-                <div>
-                   <p className="text-[10px] font-bold text-stone-400 uppercase">Cost / Yield Unit</p>
-                   <p className="text-lg font-black text-stone-800">${(getRecipeCost(recipe) / recipe.yieldQuantity).toFixed(3)}</p>
-                </div>
-                <div>
-                   <p className="text-[10px] font-bold text-stone-400 uppercase text-right">Total Batch</p>
-                   <p className="text-sm font-bold text-stone-600 text-right">${getRecipeCost(recipe).toFixed(2)}</p>
-                </div>
+             {/* Clickable Content */}
+             <div onClick={() => startEdit(recipe)} className="flex-1 cursor-pointer">
+                 <div className="bg-stone-50 px-6 py-4 flex justify-between items-center border-b border-stone-100">
+                    <div>
+                       <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{recipe.type}</span>
+                       <h4 className="text-xl font-bold serif text-stone-900">{recipe.name}</h4>
+                    </div>
+                    <div className="flex gap-4 items-center">
+                       <div className="text-right">
+                          <p className="text-[10px] font-bold text-stone-400 uppercase">Total Yield</p>
+                          <p className="text-sm font-semibold text-stone-700">{recipe.yieldQuantity}{recipe.yieldUnit}</p>
+                       </div>
+                       <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 group-hover:bg-stone-200 transition-all">
+                         <i className="fas fa-edit text-xs"></i>
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="p-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs min-w-[300px]">
+                        <thead>
+                          <tr className="border-b border-stone-100 text-stone-400 font-bold uppercase">
+                            <th className="pb-2">Ingredient</th>
+                            <th className="pb-2 text-right">Qty</th>
+                            <th className="pb-2 text-right">Cost / Unit</th>
+                            <th className="pb-2 text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recipe.components.map((comp, idx) => {
+                            const ingOrRec = comp.type === 'ingredient' 
+                              ? ingredients.find(i => i.id === comp.id) 
+                              : recipes.find(r => r.id === comp.id);
+                            const unitCost = getComponentUnitCost(comp);
+                            const lineTotal = getComponentTotalCost(comp);
+                            return (
+                              <tr key={idx} className="border-b border-stone-50 last:border-0 group-hover:bg-stone-50 transition-colors">
+                                <td className="py-2 font-medium text-stone-700">{ingOrRec?.name || 'Unknown Item'}</td>
+                                <td className="py-2 text-right text-stone-500 font-mono">{comp.quantity}{comp.unit}</td>
+                                <td className="py-2 text-right text-stone-400 font-mono">${unitCost.toFixed(3)}</td>
+                                <td className="py-2 text-right font-bold text-stone-800 font-mono">${lineTotal.toFixed(2)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    {recipe.method.length > 0 && (
+                       <div className="mt-6 pt-6 border-t border-stone-100">
+                         <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">Method</p>
+                         <p className="text-xs text-stone-600 line-clamp-2 italic leading-relaxed">{recipe.method[0]}</p>
+                       </div>
+                    )}
+                 </div>
+
+                 <div className="px-6 py-4 bg-stone-50 flex justify-between items-center border-t border-stone-100">
+                    <div>
+                       <p className="text-[10px] font-bold text-stone-400 uppercase">Cost / Yield Unit</p>
+                       <p className="text-lg font-black text-stone-800">${(getRecipeCost(recipe) / recipe.yieldQuantity).toFixed(3)}</p>
+                    </div>
+                    <div>
+                       <p className="text-[10px] font-bold text-stone-400 uppercase text-right">Total Batch</p>
+                       <p className="text-sm font-bold text-stone-600 text-right">${getRecipeCost(recipe).toFixed(2)}</p>
+                    </div>
+                 </div>
              </div>
           </div>
         ))}
