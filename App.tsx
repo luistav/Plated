@@ -333,37 +333,62 @@ const App: React.FC = () => {
 
   const addIngredient = (ing: Ingredient) => user && DbService.add(user.uid, 'ingredients', ing);
   const updateIngredient = (updated: Ingredient) => user && DbService.update(user.uid, 'ingredients', updated);
-  const deleteIngredient = (id: string) => {
-    console.log("App: Requesting delete for ingredient", id);
-    if(user) DbService.delete(user.uid, 'ingredients', id);
+  const deleteIngredient = async (id: string) => {
+    if (user) {
+      try {
+        await DbService.delete(user.uid, 'ingredients', id);
+      } catch (error: any) {
+        alert("Failed to delete ingredient: " + error.message);
+      }
+    }
   }
 
   const addRecipe = (rec: Recipe) => user && DbService.add(user.uid, 'recipes', rec);
   const updateRecipe = (updated: Recipe) => user && DbService.update(user.uid, 'recipes', updated);
-  const deleteRecipe = (id: string) => {
-    console.log("App: Requesting delete for recipe", id);
-    if(user) DbService.delete(user.uid, 'recipes', id);
+  const deleteRecipe = async (id: string) => {
+    if (user) {
+      try {
+        await DbService.delete(user.uid, 'recipes', id);
+      } catch (error: any) {
+        alert("Failed to delete recipe: " + error.message);
+      }
+    }
   }
 
   const addDish = (dish: Dish) => user && DbService.add(user.uid, 'dishes', dish);
   const updateDish = (updated: Dish) => user && DbService.update(user.uid, 'dishes', updated);
-  const deleteDish = (id: string) => {
-    console.log("App: Requesting delete for dish", id);
-    if(user) DbService.delete(user.uid, 'dishes', id);
+  const deleteDish = async (id: string) => {
+    if (user) {
+      try {
+        await DbService.delete(user.uid, 'dishes', id);
+      } catch (error: any) {
+        alert("Failed to delete dish: " + error.message);
+      }
+    }
   }
 
   const addMenu = (menu: Menu) => user && DbService.add(user.uid, 'menus', menu);
   const updateMenu = (updated: Menu) => user && DbService.update(user.uid, 'menus', updated);
-  const deleteMenu = (id: string) => {
-    console.log("App: Requesting delete for menu", id);
-    if(user) DbService.delete(user.uid, 'menus', id);
+  const deleteMenu = async (id: string) => {
+    if (user) {
+      try {
+        await DbService.delete(user.uid, 'menus', id);
+      } catch (error: any) {
+        alert("Failed to delete menu: " + error.message);
+      }
+    }
   }
 
   const addSupplier = (sup: Supplier) => user && DbService.add(user.uid, 'suppliers', sup);
   const updateSupplier = (updated: Supplier) => user && DbService.update(user.uid, 'suppliers', updated);
-  const deleteSupplier = (id: string) => {
-    console.log("App: Requesting delete for supplier", id);
-    if(user) DbService.delete(user.uid, 'suppliers', id);
+  const deleteSupplier = async (id: string) => {
+    if (user) {
+      try {
+        await DbService.delete(user.uid, 'suppliers', id);
+      } catch (error: any) {
+        alert("Failed to delete supplier: " + error.message);
+      }
+    }
   }
 
   if (loading) {

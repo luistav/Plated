@@ -29,23 +29,17 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
     if (comp.type === 'ingredient') {
       const ing = ingredients.find(i => i.id === comp.id);
       if (!ing) return 0;
-      const baseCost = getIngredientUnitCost(ing); // Cost per g/ml/unit
-      
-      // If component unit is large (kg/L), multiply base cost by 1000 to show cost per Kg/L
+      const baseCost = getIngredientUnitCost(ing);
       if (comp.unit === 'kg' && (ing.packUnit === 'kg' || ing.packUnit === 'g')) return baseCost * 1000;
       if (comp.unit === 'L' && (ing.packUnit === 'L' || ing.packUnit === 'ml')) return baseCost * 1000;
-      
       return baseCost;
     } else {
       const rec = recipes.find(r => r.id === comp.id);
       if (!rec || !rec.yieldQuantity) return 0;
-
       const subTotalCost = getRecipeCost(rec);
       let yieldBase = rec.yieldQuantity;
       if (rec.yieldUnit === 'kg' || rec.yieldUnit === 'L') yieldBase *= 1000;
-      
       const costPerBase = subTotalCost / yieldBase;
-      
       if (comp.unit === 'kg' || comp.unit === 'L') return costPerBase * 1000;
       return costPerBase;
     }
@@ -86,9 +80,7 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
   };
 
   const handleDelete = (id: string) => {
-     if (window.confirm("Are you sure you want to delete this recipe?")) {
-        onDelete(id);
-     }
+    onDelete(id);
   };
 
   const handleSave = () => {
@@ -104,13 +96,8 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
       notes: newRecipe.notes || '',
       lastUpdated: Date.now()
     };
-    
-    if (editingId) {
-      onUpdate(rec);
-    } else {
-      onAdd(rec);
-    }
-    
+    if (editingId) onUpdate(rec);
+    else onAdd(rec);
     setShowEditor(false);
     setEditingId(null);
     setNewRecipe({ name: '', type: 'Prep', components: [], yieldQuantity: 1000, yieldUnit: 'g', method: [''], notes: '' });
@@ -121,6 +108,7 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
       <div className="flex justify-between items-center">
         <h3 className="text-sm font-medium text-stone-500 italic hidden md:block">Component Recipes & Sub-Preps</h3>
         <button 
+          type="button"
           onClick={() => {
             setEditingId(null);
             setNewRecipe({ name: '', type: 'Prep', components: [], yieldQuantity: 1000, yieldUnit: 'g', method: [''], notes: '' });
@@ -135,15 +123,14 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
         {recipes.map(recipe => (
           <div key={recipe.id} className="group relative bg-white rounded-2xl border border-stone-200 overflow-hidden hover:shadow-md transition-all flex flex-col">
-             {/* Delete Button (Sibling to content) */}
              <button 
-                onClick={() => handleDelete(recipe.id)}
-                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white border border-stone-200 text-stone-300 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-all z-20 cursor-pointer"
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleDelete(recipe.id); }}
+                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white border border-stone-200 text-stone-300 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-all z-50 cursor-pointer"
              >
                 <i className="fas fa-trash-alt text-xs pointer-events-none"></i>
              </button>
 
-             {/* Clickable Content */}
              <div onClick={() => startEdit(recipe)} className="flex-1 cursor-pointer">
                  <div className="bg-stone-50 px-6 py-4 flex justify-between items-center border-b border-stone-100">
                     <div>
@@ -220,7 +207,7 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
            <div className="bg-white w-full h-full md:h-auto md:max-w-5xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col md:max-h-[90vh]">
               <div className="px-6 py-4 md:px-8 md:py-6 border-b border-stone-100 flex justify-between items-center bg-stone-50 shrink-0">
                  <h2 className="text-xl md:text-2xl font-bold serif text-stone-900">{editingId ? 'Edit Recipe' : 'New Recipe Specification'}</h2>
-                 <button onClick={() => setShowEditor(false)} className="w-10 h-10 rounded-full hover:bg-stone-200 flex items-center justify-center transition-colors">
+                 <button type="button" onClick={() => setShowEditor(false)} className="w-10 h-10 rounded-full hover:bg-stone-200 flex items-center justify-center transition-colors">
                    <i className="fas fa-times text-stone-400"></i>
                  </button>
               </div>
@@ -289,7 +276,7 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
                  <div className="space-y-4">
                     <div className="flex justify-between items-center border-b pb-2">
                        <h3 className="text-sm font-bold uppercase text-stone-900">Composition & Costing</h3>
-                       <button onClick={addComponent} className="text-xs font-bold text-amber-600 hover:text-amber-700">
+                       <button type="button" onClick={addComponent} className="text-xs font-bold text-amber-600 hover:text-amber-700">
                          <i className="fas fa-plus-circle mr-1"></i> ADD INGREDIENT
                        </button>
                     </div>
@@ -334,8 +321,7 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
                                        ))}
                                      </select>
                                   </div>
-                                  {/* Mobile Only Remove */}
-                                   <button onClick={() => removeComponent(idx)} className="md:hidden w-8 h-8 rounded-lg bg-rose-50 text-rose-400 flex items-center justify-center">
+                                  <button type="button" onClick={() => removeComponent(idx)} className="md:hidden w-8 h-8 rounded-lg bg-rose-50 text-rose-400 flex items-center justify-center">
                                      <i className="fas fa-trash-alt text-xs"></i>
                                   </button>
                               </div>
@@ -377,7 +363,7 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
                                   </div>
                               </div>
                               
-                              <button onClick={() => removeComponent(idx)} className="hidden md:flex w-10 h-10 rounded-lg hover:bg-rose-50 text-rose-400 transition-colors items-center justify-center">
+                              <button type="button" onClick={() => removeComponent(idx)} className="hidden md:flex w-10 h-10 rounded-lg hover:bg-rose-50 text-rose-400 transition-colors items-center justify-center">
                                  <i className="fas fa-trash-alt text-xs"></i>
                               </button>
                            </div>
@@ -403,12 +389,14 @@ const RecipeModule: React.FC<RecipeModuleProps> = ({ recipes, ingredients, getRe
                  </div>
                  <div className="flex gap-3 w-full md:w-auto">
                    <button 
+                    type="button"
                     onClick={() => setShowEditor(false)}
                     className="flex-1 md:flex-none px-6 py-2 rounded-xl text-sm font-bold text-stone-500 hover:bg-stone-200 transition-all border border-stone-200 md:border-0"
                    >
                      Discard
                    </button>
                    <button 
+                    type="button"
                     onClick={handleSave}
                     className="flex-1 md:flex-none bg-stone-900 text-white px-8 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-stone-800 transition-all"
                    >

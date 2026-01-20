@@ -130,10 +130,8 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this ingredient?")) {
-       onDelete(id);
-       if (editingId === id) resetForm();
-    }
+    onDelete(id);
+    if (editingId === id) resetForm();
   };
 
   const handleEdit = (ing: Ingredient) => {
@@ -286,7 +284,6 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
         />
       ) : isAdding ? (
         <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-[2rem] border border-stone-200 shadow-xl space-y-8 animate-in slide-in-from-top duration-300">
-           {/* ... Form Content (Unchanged) ... */}
            <div className="flex justify-between items-center border-b border-stone-100 pb-6">
              <div>
                <h3 className="text-2xl font-bold serif text-stone-900">{editingId ? 'Edit Item' : 'New Item'}</h3>
@@ -499,7 +496,6 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
                   )}
                   {formData.alternativeSuppliers?.map((alt, idx) => (
                      <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-stone-50 p-3 rounded-lg border border-stone-100 animate-in slide-in-from-left duration-200">
-                        {/* ... (Existing Alternative Supplier inputs) ... */}
                         <div className="col-span-3">
                            <select 
                               className="w-full bg-white border border-stone-200 rounded p-2 text-xs outline-none"
@@ -521,7 +517,7 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
                         </div>
                         <div className="col-span-2">
                            <select 
-                             className="w-full bg-white border-stone-200 rounded p-2 text-xs outline-none"
+                             className="w-full bg-white border border-stone-200 rounded p-2 text-xs outline-none"
                              value={alt.packUnit}
                              onChange={(e) => updateAlternative(idx, 'packUnit', e.target.value)}
                            >
@@ -579,7 +575,7 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
                <button 
                   type="button" 
                   onClick={() => handleDelete(editingId)}
-                  className="text-rose-500 px-6 py-3 rounded-xl font-bold text-sm hover:bg-rose-50 transition-all border border-transparent hover:border-rose-100"
+                  className="text-rose-500 px-6 py-3 rounded-xl font-bold text-sm hover:bg-rose-50 transition-all border border-transparent hover:border-rose-100 z-50"
                >
                  DELETE ITEM
                </button>
@@ -639,10 +635,11 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
 
                    {/* Delete Button (Sibling, not child of clickable area) */}
                    <button 
-                      onClick={() => handleDelete(ing.id)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white border border-stone-200 text-stone-400 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center shadow-sm z-10 md:opacity-0 md:group-hover:opacity-100 transition-all cursor-pointer"
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleDelete(ing.id); }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white border border-stone-200 text-stone-400 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center shadow-sm z-50 md:opacity-0 md:group-hover:opacity-100 transition-all cursor-pointer"
                    >
-                     <i className="fas fa-trash-alt text-xs"></i>
+                     <i className="fas fa-trash-alt text-xs pointer-events-none"></i>
                    </button>
                 </div>
               )) : (
@@ -664,7 +661,6 @@ interface InvoiceScannerProps {
 
 // ... (InvoiceScanner component remains unchanged)
 const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, suppliers, onProcessBatch }) => {
-  // ... (Code from previous step)
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [reconciledItems, setReconciledItems] = useState<ReconciledItem[]>([]);
@@ -757,8 +753,7 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
 
       const text = response.text;
       if (text) {
-        const cleanText = text.replace(/```json|```/g, '').trim();
-        const data = JSON.parse(cleanText);
+        const data = JSON.parse(text);
         
         setDetectedSupplierName(data.supplier || 'Unknown Supplier');
         autoMatchSupplier(data.supplier || '');
@@ -769,7 +764,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
            quantity: Number(item.quantity) || 1,
            packSize: Number(item.packSize) || 1,
            packUnit: item.packUnit,
-           // Ensure unitPrice is used. Fallback logic just in case AI fails slightly.
            unitPrice: Number(item.unitPrice) || (Number(item.totalLinePrice) && Number(item.quantity) ? Number(item.totalLinePrice) / Number(item.quantity) : 0),
            totalLinePrice: Number(item.totalLinePrice) || 0,
            category: item.category
@@ -786,7 +780,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
     }
   };
 
-  // Logic to find fuzzy matches for Supplier
   const autoMatchSupplier = (name: string) => {
      if (!name) return;
      const lower = name.toLowerCase();
@@ -798,11 +791,9 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
      }
   };
 
-  // Logic to find fuzzy matches for Ingredients
   const autoMatchItems = (scanned: ScannedItem[]) => {
      const reconciled: ReconciledItem[] = scanned.map(item => {
         const lowerName = item.name.toLowerCase();
-        // Simple fuzzy match: Does the existing name contain the scanned name or vice versa?
         const match = ingredients.find(ing => 
            ing.name.toLowerCase().includes(lowerName) || 
            lowerName.includes(ing.name.toLowerCase())
@@ -814,7 +805,7 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
               selected: true,
               status: 'match_found',
               linkedIngredientId: match.id,
-              matchConfidence: 0.9 // Simplified high confidence for now
+              matchConfidence: 0.9
            };
         } else {
            return {
@@ -831,12 +822,9 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
   const updateReconciledItem = (index: number, updates: Partial<ReconciledItem>) => {
      const newItems = [...reconciledItems];
      newItems[index] = { ...newItems[index], ...updates };
-     
-     // If user manually links an ingredient, change status to update
      if (updates.linkedIngredientId) {
         newItems[index].status = 'update';
      }
-     
      setReconciledItems(newItems);
   };
 
@@ -847,7 +835,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
   };
 
   const handleProcess = () => {
-    // 1. Handle Supplier
     let finalSupplierId = matchedSupplierId;
     let finalSupplierName = detectedSupplierName;
     let newSupplierObj: Supplier | undefined;
@@ -875,7 +862,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
     const newIngredients: Ingredient[] = [];
     const updatedIngredients: Ingredient[] = [];
 
-    // 2. Handle Items
     reconciledItems.forEach(item => {
        if (!item.selected) return;
 
@@ -888,7 +874,7 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
              supplierId: finalSupplierId,
              packSize: Number(item.packSize),
              packUnit: (['kg','g','L','ml','unit','bottle','sheet','pinch','portion'].includes(item.packUnit) ? item.packUnit : 'unit') as UnitOfMeasure,
-             price: Number(item.unitPrice), // Use extracted Unit Price
+             price: Number(item.unitPrice),
              yieldPercent: 100,
              notes: 'Imported from Invoice',
              lastUpdated: Date.now(),
@@ -896,11 +882,10 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
              priceHistory: [{ date: Date.now(), price: Number(item.unitPrice), supplier: finalSupplierName, note: 'Initial Import' }]
           });
        } else if (item.status === 'update' || item.status === 'match_found') {
-          if (!item.linkedIngredientId) return; // Should not happen if UI is correct
+          if (!item.linkedIngredientId) return;
           const original = ingredients.find(i => i.id === item.linkedIngredientId);
           if (original) {
              const updated = { ...original };
-             // Check price change
              if (original.price !== Number(item.unitPrice)) {
                 updated.price = Number(item.unitPrice);
                 updated.lastUpdated = Date.now();
@@ -929,13 +914,12 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
             <h2 className="text-2xl font-bold serif text-stone-900">Add from Invoice</h2>
             <p className="text-xs text-stone-400 font-bold uppercase tracking-wider mt-1">AI Reconciliation Engine</p>
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-full hover:bg-stone-200 flex items-center justify-center transition-colors">
+          <button type="button" onClick={onClose} className="w-10 h-10 rounded-full hover:bg-stone-200 flex items-center justify-center transition-colors">
              <i className="fas fa-times text-stone-400"></i>
           </button>
        </div>
 
        <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-          {/* Left: Image Viewer */}
           <div className="w-full md:w-1/3 bg-stone-900 p-6 flex flex-col justify-center items-center relative overflow-hidden border-r border-stone-800">
              {image ? (
                <div className="relative w-full h-full flex items-center justify-center">
@@ -959,11 +943,9 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
              )}
           </div>
 
-          {/* Right: Reconciliation Form */}
           <div className="w-full md:w-2/3 bg-stone-50 flex flex-col h-full overflow-hidden">
              {reconciledItems.length > 0 ? (
                <div className="flex flex-col h-full">
-                  {/* Supplier Matcher */}
                   <div className="p-6 bg-white border-b border-stone-200 shadow-sm z-10">
                      <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
                         <div className="flex-1">
@@ -988,18 +970,15 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
                      </div>
                   </div>
                  
-                 {/* Items Table */}
                  <div className="flex-1 overflow-y-auto p-6 space-y-4">
                     {reconciledItems.map((item, idx) => {
                        const linkedIngredient = ingredients.find(i => i.id === item.linkedIngredientId);
-                       
                        return (
                          <div key={idx} className={`flex gap-4 p-4 rounded-xl border transition-all ${
                             !item.selected ? 'opacity-50 bg-stone-100 border-stone-200 grayscale' :
                             item.status === 'new' ? 'bg-white border-stone-200 hover:shadow-md' :
                             'bg-blue-50/30 border-blue-100 hover:shadow-md'
                          }`}>
-                            {/* Checkbox Selection */}
                             <div className="pt-2">
                                <input 
                                  type="checkbox" 
@@ -1008,7 +987,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
                                  className="w-5 h-5 rounded border-stone-300 text-stone-900 focus:ring-stone-900 cursor-pointer"
                                />
                             </div>
-
                             <div className="flex-1">
                                <div className="flex flex-col md:flex-row gap-4 items-start md:items-center mb-3">
                                   <div className="w-32 shrink-0">
@@ -1050,7 +1028,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
                                      )}
                                   </div>
                                </div>
-
                                <div className="grid grid-cols-4 gap-3">
                                   <div className="col-span-1 space-y-1">
                                      <label className="text-[9px] font-bold text-stone-400 uppercase">Pack Size</label>
@@ -1094,8 +1071,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
                                         ${item.totalLinePrice.toFixed(2)}
                                      </div>
                                   </div>
-                                  
-                                  {/* Variance Display if Updating */}
                                   {(item.status === 'update' || item.status === 'match_found') && linkedIngredient && item.selected && (
                                      <div className="col-span-4 flex items-center gap-3 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 mt-2">
                                         <div className="text-[10px] text-blue-400 font-bold uppercase">Variance Analysis</div>
@@ -1119,8 +1094,8 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
                  </div>
 
                  <div className="p-6 border-t border-stone-100 bg-white flex justify-end gap-4 shadow-lg z-20">
-                    <button onClick={onClose} className="px-6 py-3 rounded-xl text-xs font-bold text-stone-500 hover:bg-stone-100">Cancel</button>
-                    <button onClick={handleProcess} className="bg-stone-900 text-white px-8 py-3 rounded-xl text-xs font-bold shadow-lg hover:bg-stone-800 flex items-center gap-2">
+                    <button type="button" onClick={onClose} className="px-6 py-3 rounded-xl text-xs font-bold text-stone-500 hover:bg-stone-100">Cancel</button>
+                    <button type="button" onClick={handleProcess} className="bg-stone-900 text-white px-8 py-3 rounded-xl text-xs font-bold shadow-lg hover:bg-stone-800 flex items-center gap-2">
                        <i className="fas fa-check-circle"></i>
                        PROCESS ({reconciledItems.filter(i => i.selected).length})
                     </button>
