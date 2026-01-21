@@ -381,10 +381,50 @@ const App: React.FC = () => {
 
   const addSupplier = (sup: Supplier) => user && DbService.add(user.uid, 'suppliers', sup);
   const updateSupplier = (updated: Supplier) => user && DbService.update(user.uid, 'suppliers', updated);
+  
+  // Smart Delete with Cascading Ingredient Cleanup
   const deleteSupplier = async (id: string) => {
     if (user) {
       try {
+        // 1. Identify "Unknown" supplier or determine fallback
+        let unknownSupplierId = suppliers.find(s => s.name === 'Unknown')?.id;
+        
+        // If "Unknown" doesn't exist, we'll need to handle it. 
+        // For simplicity, if we don't have an ID, we'll just set supplierId to empty string 
+        // and let the UI handle the "Unknown" display logic or the user can re-assign.
+        // Or we could create one on the fly, but that's complex here.
+
+        // 2. Scan and Sanitize Ingredients
+        ingredients.forEach(ing => {
+          let needsUpdate = false;
+          let updatedIng = { ...ing };
+
+          // Case A: Deleting the Standard Supplier
+          if (ing.supplierId === id) {
+             updatedIng.supplierId = unknownSupplierId || ''; 
+             updatedIng.supplier = 'Unknown'; // Fallback name
+             // Add history entry for the forced change
+             updatedIng.priceHistory = [
+               ...(updatedIng.priceHistory || []),
+               { date: Date.now(), price: updatedIng.price, supplier: 'Unknown', note: 'Supplier Deleted' }
+             ];
+             needsUpdate = true;
+          }
+
+          // Case B: Deleting an Alternative Supplier
+          if (ing.alternativeSuppliers && ing.alternativeSuppliers.some(alt => alt.supplierId === id)) {
+             updatedIng.alternativeSuppliers = ing.alternativeSuppliers.filter(alt => alt.supplierId !== id);
+             needsUpdate = true;
+          }
+
+          if (needsUpdate) {
+             DbService.update(user.uid, 'ingredients', updatedIng);
+          }
+        });
+
+        // 3. Delete the Supplier itself
         await DbService.delete(user.uid, 'suppliers', id);
+        
       } catch (error: any) {
         alert("Failed to delete supplier: " + error.message);
       }
@@ -430,7 +470,17 @@ const App: React.FC = () => {
         {activeTab === 'recipes' && <RecipeModule recipes={recipes} ingredients={ingredients} getRecipeCost={getRecipeCost} getIngredientUnitCost={getIngredientUnitCost} onAdd={addRecipe} onUpdate={updateRecipe} onDelete={deleteRecipe} />}
         {activeTab === 'dishes' && <DishModule dishes={dishes} recipes={recipes} ingredients={ingredients} getDishCostBreakdown={getDishCostBreakdown} onAdd={addDish} onUpdate={updateDish} onDelete={deleteDish} />}
         {activeTab === 'menus' && <MenuModule menus={menus} dishes={dishes} recipes={recipes} ingredients={ingredients} getDishCostBreakdown={getDishCostBreakdown} onAdd={addMenu} onUpdate={updateMenu} onDelete={deleteMenu} />}
-        {activeTab === 'suppliers' && <SupplierModule suppliers={suppliers} ingredients={ingredients} onAdd={addSupplier} onUpdate={updateSupplier} onDelete={deleteSupplier} />}
+        {activeTab === 'suppliers' && (
+          <SupplierModule 
+            suppliers={suppliers} 
+            ingredients={ingredients} 
+            onAdd={addSupplier} 
+            onUpdate={updateSupplier} 
+            onDelete={deleteSupplier}
+            onIngredientUpdate={updateIngredient}
+            onIngredientDelete={deleteIngredient} 
+          />
+        )}
         {activeTab === 'logic' && <LogicDocumentation />}
         {activeTab === 'profile' && userProfile && <ProfileModule userProfile={userProfile} onUpdateProfile={(p) => setUserProfile(p)} />}
       </main>

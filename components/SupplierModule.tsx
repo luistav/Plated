@@ -8,9 +8,19 @@ interface SupplierModuleProps {
   onAdd: (s: Supplier) => void;
   onUpdate: (s: Supplier) => void;
   onDelete: (id: string) => void;
+  onIngredientUpdate: (ing: Ingredient) => void;
+  onIngredientDelete: (id: string) => void;
 }
 
-const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients, onAdd, onUpdate, onDelete }) => {
+const SupplierModule: React.FC<SupplierModuleProps> = ({ 
+  suppliers, 
+  ingredients, 
+  onAdd, 
+  onUpdate, 
+  onDelete,
+  onIngredientUpdate,
+  onIngredientDelete
+}) => {
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [formData, setFormData] = useState<Partial<Supplier>>({});
@@ -81,6 +91,31 @@ const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients,
       case 'phone': return 'fa-phone';
       default: return 'fa-truck';
     }
+  };
+
+  // Smart Delete / Unlink Logic for Ingredients within the Supplier View
+  const handleRemoveItem = (ing: Ingredient, e: React.MouseEvent) => {
+     e.stopPropagation();
+     if (!selectedSupplier) return;
+
+     const isStandard = ing.supplierId === selectedSupplier.id || ing.supplier === selectedSupplier.name;
+
+     if (isStandard) {
+        // Warning for Standard connection - Deletes the item entirely
+        if (window.confirm(`⚠️ CRITICAL WARNING ⚠️\n\n"${selectedSupplier.name}" is the PRIMARY supplier for "${ing.name}".\n\nDeleting this link will PERMANENTLY DELETE the ingredient "${ing.name}" from your entire database.\n\nAre you sure you want to destroy this item?`)) {
+           onIngredientDelete(ing.id);
+        }
+     } else {
+        // Simple Unlink for Alternative connection
+        // No confirmation needed as it's non-destructive to the item
+        const updatedAlts = (ing.alternativeSuppliers || []).filter(
+           alt => alt.supplierId !== selectedSupplier.id && alt.supplierName !== selectedSupplier.name
+        );
+        onIngredientUpdate({
+           ...ing,
+           alternativeSuppliers: updatedAlts
+        });
+     }
   };
 
   return (
@@ -159,7 +194,7 @@ const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients,
            </div>
            
            <form onSubmit={handleSave} className="space-y-10">
-              
+              {/* Form content remains same as previous step */}
               {/* SECTION 1: IDENTITY & LOGISTICS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                  <div className="space-y-6">
@@ -391,7 +426,7 @@ const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients,
                         }
 
                         return (
-                          <div key={ing.id} className="p-4 flex items-center justify-between hover:bg-stone-50 transition-colors">
+                          <div key={ing.id} className="p-4 flex items-center justify-between hover:bg-stone-50 transition-colors group">
                               <div className="flex items-center gap-3">
                                 <div>
                                     <div className="flex items-center gap-2">
@@ -405,8 +440,17 @@ const SupplierModule: React.FC<SupplierModuleProps> = ({ suppliers, ingredients,
                                     <p className="text-xs text-stone-400 mt-0.5">{displayPack}</p>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <p className="font-mono font-bold text-sm text-stone-700">${displayPrice.toFixed(2)}</p>
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  <p className="font-mono font-bold text-sm text-stone-700">${displayPrice.toFixed(2)}</p>
+                                </div>
+                                <button 
+                                  onClick={(e) => handleRemoveItem(ing, e)}
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center text-stone-300 hover:text-rose-500 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100"
+                                  title={isStandard ? "Delete Ingredient" : "Unlink from Supplier"}
+                                >
+                                   {isStandard ? <i className="fas fa-trash-alt text-xs"></i> : <i className="fas fa-unlink text-xs"></i>}
+                                </button>
                               </div>
                           </div>
                         );

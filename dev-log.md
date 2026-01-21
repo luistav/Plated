@@ -87,7 +87,19 @@ Chronological record of technical implementations, architectural decisions, and 
 ---
 
 ### Log #010: Expanded Supplier Logistics
-**Status:** Current
+**Status:** Completed
 *   **Feature:** Ordering Protocol & Delivery Logistics.
 *   **Logic:** Added `orderMethod` schema (Email, SMS, Online, Phone). 
 *   **UI:** Implemented a 7-day toggle strip for delivery schedules and conditional inputs for ordering details based on the selected method. Added dedicated visual card for Representative contact info.
+
+---
+
+### Log #011: Cascading Data Integrity & Smart Delete
+**Status:** Current
+*   **Feature:** Safe deletion of Suppliers and Ingredients.
+*   **Global Logic:** Deleting a Supplier now automatically scans all Ingredients:
+    *   **Standard Matches:** Reassigned to 'Unknown' with a history log entry.
+    *   **Alternative Matches:** Cleanly removed from the alternative list.
+*   **Contextual Logic:** Deleting an item from within the Supplier view now checks the relationship:
+    *   **Standard:** Triggers a major warning before destroying the Ingredient entity.
+    *   **Alternative:** Simply unlinks the ingredient from that supplier without deleting the item itself.
