@@ -65,35 +65,102 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
     });
   }, [ingredients, searchQuery, selectedSupplierFilter]);
 
+  // Helper to generate a new supplier object on the fly
+  const createNewSupplier = (name: string): Supplier => ({
+      id: `sup-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      name: name,
+      contactEmail: '', contactPhone: '', deliveryDays: [], minOrder: 0, 
+      repName: '', repMobile: '', repEmail: '', notes: 'Quick created from Ingredient Editor'
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Find the selected supplier object if we have one
-    const linkedSupplier = suppliers.find(s => s.id === formData.supplierId || s.name === formData.supplier);
-    const currentPrice = Number(formData.price) || 0;
-    const currentSupplierName = formData.supplier || linkedSupplier?.name || '';
+    // --- LOGIC FLOW 1: IMPLICIT CREATION & SAFETY NET ---
     
-    // Handle Price History Logic
+    // 1. Resolve Standard Supplier
+    let finalSupplierId = formData.supplierId;
+    let finalSupplierName = formData.supplier?.trim() || '';
+
+    // Check if the typed name matches an existing supplier (case-insensitive check)
+    const existingStandard = suppliers.find(s => s.name.toLowerCase() === finalSupplierName.toLowerCase());
+    
+    if (existingStandard) {
+        // User typed a known name, bind to that ID
+        finalSupplierId = existingStandard.id;
+        finalSupplierName = existingStandard.name; 
+    } else if (finalSupplierName && !existingStandard) {
+        // "Ghost Supplier" - User typed a new name. Create it on the fly.
+        const newSup = createNewSupplier(finalSupplierName);
+        onAddSupplier(newSup); // Fire async save
+        finalSupplierId = newSup.id;
+        // Don't need to change name, it's already set
+    } else {
+        // Empty name? Fallback to Unknown (Safety Net)
+        const unknownSup = suppliers.find(s => s.name.trim().toLowerCase() === 'unknown');
+        if (unknownSup) {
+            finalSupplierId = unknownSup.id;
+            finalSupplierName = unknownSup.name;
+        } else {
+            // Create "Unknown"
+            const newSup = createNewSupplier('Unknown');
+            newSup.notes = 'System generated for orphaned ingredients';
+            onAddSupplier(newSup);
+            finalSupplierId = newSup.id;
+            finalSupplierName = 'Unknown';
+        }
+    }
+
+    // 2. Resolve Alternative Suppliers
+    const finalAlternatives = (formData.alternativeSuppliers || []).map(alt => {
+        let altId = alt.supplierId;
+        let altName = alt.supplierName?.trim() || '';
+
+        const existingAlt = suppliers.find(s => s.name.toLowerCase() === altName.toLowerCase());
+        
+        if (existingAlt) {
+            altId = existingAlt.id;
+            altName = existingAlt.name;
+        } else if (altName && !existingAlt) {
+            // Create new supplier for alternative
+            const newSup = createNewSupplier(altName);
+            onAddSupplier(newSup);
+            altId = newSup.id;
+        }
+
+        return {
+            ...alt,
+            supplierId: altId,
+            supplierName: altName
+        };
+    });
+
+    const currentPrice = Number(formData.price) || 0;
+    
+    // --- LOGIC FLOW 3: AUDIT TRAIL (History Triggers) ---
     let history = [...(formData.priceHistory || [])];
     
     if (editingId) {
-       // Check if price changed compared to the *previous* saved version
        const original = ingredients.find(i => i.id === editingId);
-       if (original && original.price !== currentPrice) {
-          // Add the NEW price point
-          history.push({
-             date: Date.now(),
-             price: currentPrice,
-             supplier: currentSupplierName,
-             note: original.supplier !== currentSupplierName ? 'Supplier Change' : 'Price Update'
-          });
+       if (original) {
+          const hasPriceChange = original.price !== currentPrice;
+          const hasSupplierChange = original.supplierId !== finalSupplierId; // Check ID stability
+
+          if (hasPriceChange || hasSupplierChange) {
+             history.push({
+                date: Date.now(),
+                price: currentPrice,
+                supplier: finalSupplierName || 'Unknown',
+                note: hasSupplierChange ? 'Supplier Change' : 'Price Update'
+             });
+          }
        }
     } else {
        // New Item - Initial History Point
        history.push({
           date: Date.now(),
           price: currentPrice,
-          supplier: currentSupplierName,
+          supplier: finalSupplierName || 'Unknown',
           note: 'Initial Entry'
        });
     }
@@ -107,8 +174,8 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
       category: formData.category as IngredientCategory,
       
       // Root fields (Standard/Active)
-      supplier: currentSupplierName,
-      supplierId: formData.supplierId || linkedSupplier?.id || '',
+      supplier: finalSupplierName,
+      supplierId: finalSupplierId || '',
       packSize: Number(formData.packSize) || 0,
       packUnit: formData.packUnit as UnitOfMeasure,
       price: currentPrice,
@@ -116,7 +183,7 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
       yieldPercent: Number(formData.yieldPercent) || 100,
       notes: formData.notes || '',
       lastUpdated: Date.now(),
-      alternativeSuppliers: formData.alternativeSuppliers || [],
+      alternativeSuppliers: finalAlternatives,
       priceHistory: history
     };
     
@@ -151,7 +218,6 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
     setFormData({ category: IngredientCategory.Produce, yieldPercent: 100, packUnit: 'kg', alternativeSuppliers: [], priceHistory: [] });
   };
 
-  // ... (Alternative Supplier Logic - unchanged)
   const addAlternativeSupplier = () => {
     setFormData({
       ...formData,
@@ -166,9 +232,10 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
      const updated = [...(formData.alternativeSuppliers || [])];
      updated[index] = { ...updated[index], [field]: value };
      
-     if (field === 'supplierId') {
-        const s = suppliers.find(sup => sup.id === value);
-        if (s) updated[index].supplierName = s.name;
+     // Live-match ID if name changes
+     if (field === 'supplierName') {
+        const s = suppliers.find(sup => sup.name.toLowerCase() === value.toString().toLowerCase());
+        updated[index].supplierId = s ? s.id : ''; // Clear ID if not found (implies new creation)
      }
 
      setFormData({ ...formData, alternativeSuppliers: updated });
@@ -180,10 +247,12 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
      setFormData({ ...formData, alternativeSuppliers: updated });
   };
 
+  // --- LOGIC FLOW 2: PROMOTION SYSTEM (Swapping) ---
   const makeStandard = (index: number) => {
      const alt = formData.alternativeSuppliers?.[index];
      if (!alt) return;
 
+     // 1. Snapshot Current Standard
      const currentStandardAsAlternative: IngredientPricing = {
        supplierId: formData.supplierId || '',
        supplierName: formData.supplier || 'Previous Standard',
@@ -192,9 +261,11 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
        packUnit: (formData.packUnit || 'kg') as UnitOfMeasure
      };
 
+     // 2. Prepare Array: Swap the selected alt with the current standard snapshot
      const updatedAlternatives = [...(formData.alternativeSuppliers || [])];
      updatedAlternatives[index] = currentStandardAsAlternative;
 
+     // 3. Promote & Update State
      setFormData({
         ...formData,
         supplier: alt.supplierName,
@@ -206,7 +277,6 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
      });
   };
 
-  // ... (Visualization Helpers - unchanged)
   const getPriceTrend = (history: PriceHistoryEntry[]) => {
     if (!history || history.length < 2) return null;
     const latest = history[0];
@@ -334,7 +404,7 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
                         className="w-full bg-white border-stone-200 border rounded-xl p-3 text-sm outline-none" 
                         type="text" 
                         list="supplier-list"
-                        placeholder="Supplier Name"
+                        placeholder="Type to search or create..."
                         value={formData.supplier || ''}
                         onChange={e => {
                            const val = e.target.value;
@@ -497,14 +567,13 @@ const IngredientModule: React.FC<IngredientModuleProps> = ({ ingredients, suppli
                   {formData.alternativeSuppliers?.map((alt, idx) => (
                      <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-stone-50 p-3 rounded-lg border border-stone-100 animate-in slide-in-from-left duration-200">
                         <div className="col-span-3">
-                           <select 
+                           <input 
+                              list="supplier-list"
                               className="w-full bg-white border border-stone-200 rounded p-2 text-xs outline-none"
-                              value={alt.supplierId}
-                              onChange={(e) => updateAlternative(idx, 'supplierId', e.target.value)}
-                           >
-                              <option value="">Select Supplier...</option>
-                              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                           </select>
+                              placeholder="Supplier Name"
+                              value={alt.supplierName}
+                              onChange={(e) => updateAlternative(idx, 'supplierName', e.target.value)}
+                           />
                         </div>
                         <div className="col-span-2">
                            <input 
@@ -684,7 +753,20 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
   const analyzeImage = async (base64Image: string) => {
     setIsAnalyzing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // FIX 1: Safe API Key Access
+      const apiKey = typeof process !== "undefined" ? process.env.API_KEY : "";
+      
+      if (!apiKey) {
+        alert("Configuration Error: API_KEY is missing. Please ensure your environment is set up correctly.");
+        setIsAnalyzing(false);
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      
+      // FIX 2: Dynamic MIME Type Extraction
+      // Extracts "image/png" from "data:image/png;base64,..."
+      const mimeType = base64Image.substring(base64Image.indexOf(":") + 1, base64Image.indexOf(";"));
       const base64Data = base64Image.split(',')[1];
       
       const prompt = `
@@ -721,7 +803,7 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [
-            { inlineData: { mimeType: 'image/jpeg', data: base64Data } },
+            { inlineData: { mimeType: mimeType, data: base64Data } },
             { text: prompt }
           ]
         },
@@ -886,8 +968,26 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
           const original = ingredients.find(i => i.id === item.linkedIngredientId);
           if (original) {
              const updated = { ...original };
-             if (original.price !== Number(item.unitPrice)) {
+             let historyNote = '';
+             let shouldUpdate = false;
+
+             // --- LOGIC FLOW 4: INVOICE SCANNER SOURCE AWARENESS ---
+             // Check if Supplier changed
+             if (original.supplierId !== finalSupplierId) {
+                updated.supplier = finalSupplierName;
+                updated.supplierId = finalSupplierId;
+                historyNote = 'Supplier Change (Invoice)';
+                shouldUpdate = true;
+             }
+
+             // Check if Price changed
+             if (Number(item.unitPrice) !== original.price) {
                 updated.price = Number(item.unitPrice);
+                if (!historyNote) historyNote = 'Invoice Update';
+                shouldUpdate = true;
+             }
+
+             if (shouldUpdate) {
                 updated.lastUpdated = Date.now();
                 updated.priceHistory = [
                    ...(updated.priceHistory || []),
@@ -895,11 +995,11 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onClose, ingredients, s
                       date: Date.now(), 
                       price: Number(item.unitPrice), 
                       supplier: finalSupplierName, 
-                      note: 'Invoice Update' 
+                      note: historyNote
                    }
                 ].sort((a,b) => b.date - a.date);
+                updatedIngredients.push(updated);
              }
-             updatedIngredients.push(updated);
           }
        }
     });

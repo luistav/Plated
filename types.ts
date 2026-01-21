@@ -25,13 +25,19 @@ export interface Supplier {
   id: string;
   userId?: string; // Data Privacy Field
   name: string;
+  
+  // Ordering Logistics
+  orderMethod?: 'email' | 'sms' | 'online' | 'phone';
   contactEmail: string;
   contactPhone: string;
   deliveryDays: string[]; // e.g. ['Mon', 'Wed', 'Fri']
   minOrder: number;
+  
+  // Rep Contact
   repName: string;
   repMobile: string;
   repEmail: string;
+  
   notes: string;
 }
 

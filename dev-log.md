@@ -49,7 +49,45 @@ Chronological record of technical implementations, architectural decisions, and 
 
 ---
 
-### Log #006: Planned - Inventory Logic
-**Status:** Backlog
-*   **Objective:** Define the schema for "Stock Items" vs "Inventory Counts".
-*   **Logic:** Need to handle "Theoritical" vs "Actual" waste calculation logic.
+### Log #006: Data Integrity & Smart Audit Trail
+**Status:** Completed
+*   **Feature:** Implemented the "Safety Net" logic to prevent orphaned ingredients. All items without a supplier now default to an "Unknown" system entity.
+*   **Logic:** Refactored `makeStandard` to allow swapping alternative suppliers into the standard slot while preserving history.
+*   **Audit Trail:** Enhanced `priceHistory` to log specific "Supplier Change" events, not just price fluctuations.
+*   **Scanner:** Updated the Invoice Scanner to be "Source-Aware", automatically updating the supplier link if an item is scanned from a new vendor.
+
+---
+
+### Log #007: Implicit Supplier Creation (UX Polish)
+**Status:** Completed
+*   **Feature:** Frictionless data entry for new suppliers.
+*   **Issue:** Users had to leave the Ingredient form to create a new Supplier entity, or rely on "Unknown".
+*   **Solution:** Implemented "Implicit Creation". Typing a new name in the Supplier field (Standard or Alternative) now automatically generates a new Supplier entity in the background upon save.
+*   **UI Update:** Replaced `<select>` dropdowns for Alternative Suppliers with `<input list="...">` to support free-text entry alongside existing options.
+
+---
+
+### Log #008: AI Resilience & Scanner Fix
+**Status:** Completed
+*   **Bug:** Invoice Scanner button was crashing immediately.
+*   **Diagnosis:** Code accessed `process.env` directly in a browser environment where `process` is undefined. Also, hardcoded MIME types caused rejection for non-JPEG uploads.
+*   **Fix:** 
+    *   Implemented safe access pattern `typeof process !== 'undefined'` for API key retrieval.
+    *   Added dynamic MIME type extraction from Base64 headers to support PNG/WebP.
+    *   Added user alert if API key is missing instead of silent failure.
+
+---
+
+### Log #009: Supplier Catalog Aggregation
+**Status:** Completed
+*   **Feature:** Comprehensive Supplier Catalogs.
+*   **Issue:** Catalog view was only showing ingredients where the supplier was the *Standard* (Primary) supplier, hiding items where they were listed as an alternative.
+*   **Solution:** Updated `SupplierModule` filtering logic to aggregate both Standard and Alternative links. Added "Pref" and "Alt" badges to the list to distinguish relationship type and show correct pricing/pack info.
+
+---
+
+### Log #010: Expanded Supplier Logistics
+**Status:** Current
+*   **Feature:** Ordering Protocol & Delivery Logistics.
+*   **Logic:** Added `orderMethod` schema (Email, SMS, Online, Phone). 
+*   **UI:** Implemented a 7-day toggle strip for delivery schedules and conditional inputs for ordering details based on the selected method. Added dedicated visual card for Representative contact info.
